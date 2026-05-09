@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SCAN PACKING</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+
+<!-- ZXing: รองรับ QR Code + Barcode ทุกประเภท (Code128, Code39, EAN, UPC, DataMatrix, ฯลฯ) -->
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -152,14 +155,19 @@
   }
   .mode-btn:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
 
+  /* ── Camera wrapper ── */
   #camera-container {
     position: relative; width: 100%; background: #000;
     border-radius: 12px; overflow: hidden; display: none;
     border: 1px solid var(--border); margin-bottom: 14px;
   }
   #camera-container.active { display: block; }
-  #video-preview { width: 100%; display: block; max-height: 260px; object-fit: cover; }
-  #scan-canvas { display: none; }
+
+  /* ZXing renders into a <video> we provide */
+  #video-preview {
+    width: 100%; display: block;
+    max-height: 260px; object-fit: cover;
+  }
 
   .scan-overlay {
     position: absolute; inset: 0;
@@ -325,6 +333,15 @@
   }
   .success-flash.show { opacity:1; }
 
+  /* Library badge */
+  .lib-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 11px; color: var(--accent); letter-spacing: 1px;
+    margin-bottom: 14px;
+  }
+
   @media(max-width:480px){
     .app-wrapper{padding:12px;}
     .header-title{font-size:18px;}
@@ -355,17 +372,21 @@
   <div class="card">
     <div class="card-label">📡 โหมดสแกน</div>
 
+    <div class="lib-badge">
+      ✅ ZXing Multi-Format Scanner — รองรับ QR · Code128 · Code39 · EAN · UPC · DataMatrix
+    </div>
+
     <div class="mode-toggle">
       <button class="mode-btn active" id="btn-camera" onclick="setMode('camera')">📷 กล้องอุปกรณ์</button>
       <button class="mode-btn" id="btn-external" onclick="setMode('external')">🔫 สแกนเนอร์ภายนอก</button>
     </div>
 
-    <!-- Camera -->
+    <!-- Camera section -->
     <div id="camera-section">
       <button id="cam-toggle" class="cam-toggle-btn" onclick="toggleCamera()">📷 เปิดกล้องสแกน</button>
       <div id="camera-container">
+        <!-- ZXing จะ attach stream เข้า video element นี้โดยตรง -->
         <video id="video-preview" autoplay playsinline muted></video>
-        <canvas id="scan-canvas"></canvas>
         <div class="scan-overlay">
           <div class="scan-frame">
             <div class="corner-br"></div>
@@ -377,7 +398,7 @@
       </div>
     </div>
 
-    <!-- Single unified input box -->
+    <!-- Input row -->
     <div class="order-input-row">
       <input
         type="text"
@@ -453,7 +474,7 @@
 
 <script>
 // =========================================
-//  CONFIG — hardcoded, no setup needed
+//  CONFIG
 // =========================================
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFaC5E-cplXXO9HzLy8KQpsQJApwht1KYiU90DtSfr4DWlY5FpOwYiMVDXgpKqQ1a5/exec';
 
@@ -461,13 +482,12 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFaC5E-cplXXO9HzLy8
 //  STATE
 // =========================================
 let scannedOrders = new Set();
-let scanMode = 'camera';
-let cameraActive = false;
-let cameraStream = null;
-let scanAnimFrame = null;
-let lastCamScan = 0;
-let countSuccess = 0, countDup = 0;
-let logEntries = [];
+let scanMode      = 'camera';
+let cameraActive  = false;
+let zxingReader   = null;   // ZXingBrowserCodeReader instance
+let countSuccess  = 0, countDup = 0;
+let logEntries    = [];
+let lastCamScan   = 0;      // debounce timestamp (ms)
 
 // =========================================
 //  INIT
@@ -478,27 +498,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const saved = localStorage.getItem('operatorName');
   if (saved) document.getElementById('operator-name').value = saved;
-  document.getElementById('operator-name').addEventListener('input', e => {
-    localStorage.setItem('operatorName', e.target.value);
-  });
+  document.getElementById('operator-name').addEventListener('input', e =>
+    localStorage.setItem('operatorName', e.target.value)
+  );
 
   const input = document.getElementById('order-input');
-
-  // Enter = submit
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); submitFromInput(); }
   });
 
-  // Re-focus input in external mode after any click
   document.addEventListener('click', e => {
-    if (scanMode === 'external' && !e.target.closest('button') && e.target !== input) {
+    if (scanMode === 'external' && !e.target.closest('button') && e.target !== input)
       setTimeout(() => input.focus(), 50);
-    }
   });
 });
 
 // =========================================
-//  CLOCK — Thailand UTC+7
+//  CLOCK  (Thai UTC+7)
 // =========================================
 function updateClock() {
   const t = getThaiTime();
@@ -528,7 +544,7 @@ function setMode(mode) {
   document.getElementById('btn-external').classList.toggle('active', mode==='external');
   document.getElementById('camera-section').style.display = mode==='camera' ? 'block' : 'none';
 
-  if (mode==='external') {
+  if (mode === 'external') {
     document.getElementById('input-hint').textContent =
       '🔫 โฟกัสที่ช่องนี้แล้วสแกน — บันทึกอัตโนมัติเมื่อกด Enter | ⌨️ หรือพิมพ์แล้วกด Enter';
     if (cameraActive) stopCamera();
@@ -540,67 +556,77 @@ function setMode(mode) {
 }
 
 // =========================================
-//  CAMERA
+//  CAMERA  (ZXing)
 // =========================================
 async function toggleCamera() {
   cameraActive ? stopCamera() : await startCamera();
 }
 
 async function startCamera() {
+  // ตรวจสอบว่า ZXing โหลดสำเร็จ
+  if (typeof ZXing === 'undefined') {
+    setStatus('error','❌','ไม่สามารถโหลด ZXing Library ได้ กรุณารีเฟรชหน้า');
+    return;
+  }
+
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal:'environment' }, width:{ideal:1920}, height:{ideal:1080} }
-    });
-    const video = document.getElementById('video-preview');
-    video.srcObject = cameraStream;
-    await video.play();
-    cameraActive = true;
     document.getElementById('camera-container').classList.add('active');
     document.getElementById('cam-toggle').innerHTML = '⏹ หยุดกล้อง';
     document.getElementById('cam-toggle').classList.add('active');
-    document.getElementById('cam-status').textContent = 'กำลังสแกน...';
-    requestAnimationFrame(scanFrame);
+    document.getElementById('cam-status').textContent = 'กำลังเริ่มต้นกล้อง...';
+
+    // ใช้ BrowserMultiFormatReader — รองรับทั้ง QR + Barcode ทุกประเภท
+    zxingReader = new ZXing.BrowserMultiFormatReader();
+
+    // ดึง device list แล้วเลือกกล้องหลัง (environment)
+    const devices = await zxingReader.listVideoInputDevices();
+    let deviceId = undefined;
+    if (devices && devices.length > 0) {
+      // เลือกกล้องหลัง ถ้ามี
+      const backCam = devices.find(d =>
+        /back|rear|environment/i.test(d.label)
+      );
+      deviceId = backCam ? backCam.deviceId : devices[devices.length - 1].deviceId;
+    }
+
+    const videoEl = document.getElementById('video-preview');
+
+    // decodeFromVideoDevice จะ loop ต่อเนื่อง callback ทุกครั้งที่อ่านได้
+    await zxingReader.decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
+      if (result) {
+        const now = Date.now();
+        if (now - lastCamScan > 2000) {   // debounce 2 วินาที
+          lastCamScan = now;
+          processOrder(result.getText().trim());
+        }
+      }
+      // err อาจเป็น NotFoundException ปกติ (ไม่มีโค้ดในเฟรม) ไม่ต้อง handle
+    });
+
+    cameraActive = true;
+    document.getElementById('cam-status').textContent = 'กำลังสแกน QR / Barcode...';
+
   } catch(err) {
+    document.getElementById('camera-container').classList.remove('active');
+    document.getElementById('cam-toggle').innerHTML = '📷 เปิดกล้องสแกน';
+    document.getElementById('cam-toggle').classList.remove('active');
     setStatus('error','❌',`ไม่สามารถเข้าถึงกล้อง: ${err.message}`);
   }
 }
 
 function stopCamera() {
-  if (cameraStream) { cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null; }
+  if (zxingReader) {
+    zxingReader.reset();   // หยุด stream และ decode loop
+    zxingReader = null;
+  }
   cameraActive = false;
   document.getElementById('camera-container').classList.remove('active');
   document.getElementById('cam-toggle').innerHTML = '📷 เปิดกล้องสแกน';
   document.getElementById('cam-toggle').classList.remove('active');
-  if (scanAnimFrame) cancelAnimationFrame(scanAnimFrame);
-}
-
-function scanFrame() {
-  if (!cameraActive) return;
-  const video = document.getElementById('video-preview');
-  const canvas = document.getElementById('scan-canvas');
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const qr = jsQR(img.data, img.width, img.height, { inversionAttempts:'dontInvert' });
-    if (qr && qr.data) {
-      const now = Date.now();
-      if (now - lastCamScan > 2000) {
-        lastCamScan = now;
-        processOrder(qr.data.trim());
-      }
-      // pause then resume
-      setTimeout(() => { scanAnimFrame = requestAnimationFrame(scanFrame); }, 2000);
-      return;
-    }
-  }
-  scanAnimFrame = requestAnimationFrame(scanFrame);
 }
 
 // =========================================
-//  UNIFIED INPUT SUBMIT
+//  INPUT SUBMIT
 // =========================================
 function submitFromInput() {
   const input = document.getElementById('order-input');
@@ -633,7 +659,7 @@ async function submitToSheet(orderNo) {
   const date = getThaiDateStr();
   const time = getThaiTimeStr();
 
-  scannedOrders.add(orderNo); // lock immediately
+  scannedOrders.add(orderNo);
 
   document.getElementById('last-order').textContent = orderNo;
   document.getElementById('last-order').classList.remove('empty');
@@ -662,7 +688,7 @@ async function submitToSheet(orderNo) {
 }
 
 // =========================================
-//  UI
+//  UI HELPERS
 // =========================================
 function setStatus(type, icon, text) {
   document.getElementById('status-bar').className = 'status-bar ' + type;
@@ -671,7 +697,8 @@ function setStatus(type, icon, text) {
 }
 
 function showDupPopup(orderNo) {
-  document.getElementById('dup-order-text').textContent = `Order No. "${orderNo}" ถูกสแกนแล้วในเซสชันนี้`;
+  document.getElementById('dup-order-text').textContent =
+    `Order No. "${orderNo}" ถูกสแกนแล้วในเซสชันนี้`;
   document.getElementById('dup-popup').classList.add('show');
   setStatus('error','⚠️',`แพ็คซ้ำ: ${orderNo}`);
   setTimeout(() => setStatus('idle','⏳','พร้อมรับการสแกน'), 3000);
@@ -679,7 +706,7 @@ function showDupPopup(orderNo) {
 
 function closePopup() {
   document.getElementById('dup-popup').classList.remove('show');
-  if (scanMode==='external') document.getElementById('order-input').focus();
+  if (scanMode === 'external') document.getElementById('order-input').focus();
 }
 
 function flashSuccess() {
@@ -710,14 +737,16 @@ function clearLog() {
   document.getElementById('count-dup').textContent='0';
   document.getElementById('last-order').textContent='รอการสแกน...';
   document.getElementById('last-order').classList.add('empty');
-  document.getElementById('log-body').innerHTML='<tr><td colspan="5" class="empty-log">ยังไม่มีการสแกน</td></tr>';
+  document.getElementById('log-body').innerHTML=
+    '<tr><td colspan="5" class="empty-log">ยังไม่มีการสแกน</td></tr>';
   setStatus('idle','⏳','พร้อมรับการสแกน');
 }
 
+// Dismiss popup on overlay click or Escape
 document.getElementById('dup-popup').addEventListener('click', function(e) {
-  if (e.target===this) closePopup();
+  if (e.target === this) closePopup();
 });
-document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
+document.addEventListener('keydown', e => { if (e.key==='Escape') closePopup(); });
 </script>
 </body>
 </html>
