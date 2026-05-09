@@ -490,6 +490,98 @@ let logEntries    = [];
 let lastCamScan   = 0;      // debounce timestamp (ms)
 
 // =========================================
+//  AUDIO ENGINE  (Web Audio API — ไม่ต้องโหลดไฟล์)
+// =========================================
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // resume ถ้าถูก suspend (browser policy)
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+/**
+ * เสียงสแกนสำเร็จ — เลียนแบบ store scanner beep
+ * สั้น แหลม ชัด  (เหมือน Pixabay store-scanner-beep-90395)
+ */
+function playScanSuccess() {
+  try {
+    const ctx = getAudioCtx();
+    const t = ctx.currentTime;
+
+    // Oscillator หลัก: สี่เหลี่ยม → คล้ายเสียง beep เครื่องสแกนจริง
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1800, t);          // เริ่มสูง
+    osc.frequency.exponentialRampToValueAtTime(2100, t + 0.04); // sweep เล็กน้อย
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.18, t + 0.005);  // attack เร็วมาก
+    gain.gain.setValueAtTime(0.18, t + 0.065);
+    gain.gain.linearRampToValueAtTime(0, t + 0.11);      // decay
+
+    // lowpass filter เพื่อไม่ให้แหลมเกิน
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 3500;
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.12);
+  } catch(e) { /* silent fail */ }
+}
+
+/**
+ * เสียงแจ้งเตือนซ้ำ — ดังและน่ากลัว
+ * 3 beep สั้น ถี่ ต่ำ  (เหมือนเสียง error ของเครื่อง POS)
+ */
+function playDupAlert() {
+  try {
+    const ctx = getAudioCtx();
+    const t = ctx.currentTime;
+
+    [0, 0.18, 0.36].forEach(offset => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(320, t + offset);
+      osc.frequency.exponentialRampToValueAtTime(220, t + offset + 0.13);
+
+      gain.gain.setValueAtTime(0, t + offset);
+      gain.gain.linearRampToValueAtTime(0.55, t + offset + 0.008);
+      gain.gain.setValueAtTime(0.55, t + offset + 0.09);
+      gain.gain.linearRampToValueAtTime(0, t + offset + 0.15);
+
+      const dist = ctx.createWaveShaper();
+      const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) {
+        const x = (i * 2) / 256 - 1;
+        curve[i] = (Math.PI + 80) * x / (Math.PI + 80 * Math.abs(x));
+      }
+      dist.curve = curve;
+
+      osc.connect(dist);
+      dist.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(t + offset);
+      osc.stop(t + offset + 0.16);
+    });
+  } catch(e) { /* silent fail */ }
+}
+
+// unlock AudioContext บน mobile เมื่อ user แตะครั้งแรก
+document.addEventListener('touchstart', () => getAudioCtx(), { once: true });
+document.addEventListener('click',      () => getAudioCtx(), { once: true });
+
+// =========================================
 //  INIT
 // =========================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -575,14 +667,34 @@ async function startCamera() {
     document.getElementById('cam-toggle').classList.add('active');
     document.getElementById('cam-status').textContent = 'กำลังเริ่มต้นกล้อง...';
 
-    // ใช้ BrowserMultiFormatReader — รองรับทั้ง QR + Barcode ทุกประเภท
-    zxingReader = new ZXing.BrowserMultiFormatReader();
+    // ── ตั้งค่า hints เพื่อเพิ่มความเร็ว decode ──
+    const hints = new Map();
+
+    // จำกัดประเภทที่ต้องใช้จริง → ลด overhead
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.QR_CODE,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.DATA_MATRIX,
+      ZXing.BarcodeFormat.ITF,
+    ]);
+
+    // พยายามอ่านรูปที่หมุนแล้ว (ช่วยจับ barcode แนวนอน)
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+    zxingReader = new ZXing.BrowserMultiFormatReader(hints, {
+      delayBetweenScanAttempts: 80,   // ms ระหว่างแต่ละเฟรม (ค่าเริ่มต้น 500ms → เร็วขึ้น ~6x)
+      delayBetweenScanSuccess: 800,   // ms หลังอ่านสำเร็จก่อน scan ต่อ
+    });
 
     // ดึง device list แล้วเลือกกล้องหลัง (environment)
     const devices = await zxingReader.listVideoInputDevices();
     let deviceId = undefined;
     if (devices && devices.length > 0) {
-      // เลือกกล้องหลัง ถ้ามี
       const backCam = devices.find(d =>
         /back|rear|environment/i.test(d.label)
       );
@@ -591,16 +703,18 @@ async function startCamera() {
 
     const videoEl = document.getElementById('video-preview');
 
-    // decodeFromVideoDevice จะ loop ต่อเนื่อง callback ทุกครั้งที่อ่านได้
+    // ขอกล้องความละเอียดสูงขึ้น → อ่าน barcode เล็กได้ดีขึ้น
+    zxingReader.hints = hints;
+
     await zxingReader.decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
       if (result) {
         const now = Date.now();
-        if (now - lastCamScan > 2000) {   // debounce 2 วินาที
+        if (now - lastCamScan > 800) {   // debounce 0.8 วินาที (ลดจาก 2s)
           lastCamScan = now;
           processOrder(result.getText().trim());
         }
       }
-      // err อาจเป็น NotFoundException ปกติ (ไม่มีโค้ดในเฟรม) ไม่ต้อง handle
+      // NotFoundException ปกติเมื่อไม่มีโค้ดในเฟรม — ไม่ต้อง handle
     });
 
     cameraActive = true;
@@ -676,6 +790,7 @@ async function submitToSheet(orderNo) {
     countSuccess++;
     document.getElementById('count-success').textContent = countSuccess;
     setStatus('success','✅',`บันทึกสำเร็จ: ${orderNo}`);
+    playScanSuccess();
     flashSuccess();
     addLogEntry(orderNo, time, date, operatorName, 'success');
     setTimeout(() => setStatus('idle','⏳','พร้อมรับการสแกน'), 2500);
@@ -701,6 +816,7 @@ function showDupPopup(orderNo) {
     `Order No. "${orderNo}" ถูกสแกนแล้วในเซสชันนี้`;
   document.getElementById('dup-popup').classList.add('show');
   setStatus('error','⚠️',`แพ็คซ้ำ: ${orderNo}`);
+  playDupAlert();
   setTimeout(() => setStatus('idle','⏳','พร้อมรับการสแกน'), 3000);
 }
 
