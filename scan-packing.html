@@ -3,779 +3,172 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SCAN PACKING</title>
-<!-- ZXing: far more reliable QR + Barcode reader than jsQR -->
+<title>SCAN PACKING PRO</title>
+<!-- ใช้ ZXing Library แทน jsQR เพื่อให้สแกนได้ทั้ง Barcode และ QR -->
 <script src="https://unpkg.com/@zxing/browser@latest/umd/index.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=JetBrains+Mono:wght@700&display=swap');
 
-:root {
-  --bg: #060d1a;
-  --surface: #0e1826;
-  --surface2: #162032;
-  --border: #1c2e45;
-  --accent: #00c8f0;
-  --accent2: #0077bb;
-  --success: #00e676;
-  --warn: #ffb300;
-  --danger: #ff3d3d;
-  --text: #ddeeff;
-  --muted: #4a6080;
-  --glow: 0 0 24px rgba(0,200,240,0.25);
-}
+  :root {
+    --bg: #060d1a; --surface: #0e1826; --border: #1c2e45;
+    --accent: #00c8f0; --success: #00e676; --danger: #ff3d3d; --text: #ddeeff;
+  }
 
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sarabun', sans-serif; background: var(--bg); color: var(--text); padding: 15px; }
 
-body {
-  font-family: 'Sarabun', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100dvh;
-  overflow-x: hidden;
-}
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 15px; }
+  .title { font-size: 20px; font-weight: 800; color: var(--accent); margin-bottom: 15px; text-align: center; }
 
-/* grid bg */
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  background:
-    linear-gradient(rgba(0,200,240,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,200,240,0.025) 1px, transparent 1px);
-  background-size: 44px 44px;
-  pointer-events: none; z-index: 0;
-}
+  /* Camera Styling */
+  #video-container { position: relative; width: 100%; background: #000; border-radius: 12px; overflow: hidden; display: none; border: 2px solid var(--accent); }
+  #video-preview { width: 100%; display: block; }
+  
+  .scanner-overlay {
+    position: absolute; inset: 0; border: 2px solid rgba(0,200,240,0.2);
+    display: flex; align-items: center; justify-content: center; pointer-events: none;
+  }
+  .target-box { width: 250px; height: 150px; border: 2px solid var(--accent); position: relative; box-shadow: 0 0 20px rgba(0,200,240,0.4); }
+  .scan-line { position: absolute; width: 100%; height: 2px; background: var(--accent); animation: scan 2s infinite; }
+  @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
 
-.wrap {
-  position: relative; z-index: 1;
-  max-width: 680px; margin: 0 auto;
-  padding: 14px 14px 60px;
-}
+  .btn { 
+    width: 100%; padding: 12px; border-radius: 10px; border: none; cursor: pointer; 
+    font-weight: 700; font-family: 'Sarabun'; transition: 0.2s; margin-top: 10px;
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-stop { background: var(--danger); color: #fff; }
 
-/* ── HEADER ── */
-.header {
-  display: flex; align-items: center; gap: 12px;
-  padding: 16px 0 14px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 18px;
-}
-.logo {
-  width: 46px; height: 46px; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border-radius: 13px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 24px; box-shadow: var(--glow);
-}
-.title { font-size: 21px; font-weight: 800; letter-spacing: 3px;
-  background: linear-gradient(90deg, var(--accent) 30%, #fff);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; margin-top: 1px; }
-.clock {
-  margin-left: auto;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 15px; color: var(--accent);
-  white-space: nowrap; letter-spacing: 1px;
-}
-
-/* ── CARD ── */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 18px;
-  margin-bottom: 14px;
-  position: relative; overflow: hidden;
-}
-.card::after {
-  content: '';
-  position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  opacity: 0.4;
-}
-.label {
-  font-size: 10px; font-weight: 800; letter-spacing: 2.5px;
-  color: var(--accent); text-transform: uppercase;
-  margin-bottom: 11px;
-  display: flex; align-items: center; gap: 7px;
-}
-.label::before {
-  content: ''; width: 7px; height: 7px;
-  background: var(--accent); border-radius: 50%;
-  box-shadow: 0 0 8px var(--accent); flex-shrink: 0;
-}
-
-/* ── INPUTS ── */
-.inp {
-  width: 100%;
-  background: var(--surface2);
-  border: 1.5px solid var(--border);
-  border-radius: 11px;
-  color: var(--text);
-  font-family: 'Sarabun', sans-serif;
-  font-size: 15px; padding: 12px 15px;
-  outline: none; transition: border-color 0.2s, box-shadow 0.2s;
-}
-.inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,200,240,0.1); }
-.inp::placeholder { color: var(--muted); }
-
-/* ── MODE TOGGLE ── */
-.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-.modeBtn {
-  padding: 11px 8px; border-radius: 11px;
-  border: 1.5px solid var(--border);
-  background: var(--surface2);
-  color: var(--muted);
-  font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 700;
-  cursor: pointer; transition: all 0.2s;
-  display: flex; align-items: center; justify-content: center; gap: 7px;
-  user-select: none;
-}
-.modeBtn.on {
-  background: linear-gradient(135deg, rgba(0,200,240,0.14), rgba(0,119,187,0.14));
-  border-color: var(--accent); color: var(--accent); box-shadow: var(--glow);
-}
-.modeBtn:hover:not(.on) { border-color: var(--muted); color: var(--text); }
-
-/* ── CAMERA ── */
-#camWrap {
-  position: relative; width: 100%;
-  background: #000; border-radius: 13px;
-  overflow: hidden; border: 1.5px solid var(--border);
-  display: none; margin-bottom: 13px;
-}
-#camWrap.show { display: block; }
-
-#videoEl {
-  width: 100%; display: block;
-  max-height: 300px; object-fit: cover;
-}
-
-.finder {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  pointer-events: none;
-}
-.frame {
-  width: 210px; height: 210px; position: relative;
-}
-.frame .c { position: absolute; width: 32px; height: 32px; border: 3px solid var(--accent); }
-.frame .tl { top:0; left:0; border-right:none; border-bottom:none; }
-.frame .tr { top:0; right:0; border-left:none; border-bottom:none; }
-.frame .bl { bottom:0; left:0; border-right:none; border-top:none; }
-.frame .br { bottom:0; right:0; border-left:none; border-top:none; }
-.line {
-  position: absolute; left: 6px; right: 6px; height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  box-shadow: 0 0 12px var(--accent);
-  animation: sweep 2s ease-in-out infinite;
-}
-@keyframes sweep { 0%{top:8px} 50%{top:195px} 100%{top:8px} }
-
-.camBar {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  background: rgba(0,0,0,0.7); padding: 8px;
-  text-align: center; font-size: 12px; color: var(--accent); letter-spacing: 1px;
-}
-
-/* scan result flash on frame */
-.frameFlash {
-  position: absolute; inset: 0;
-  border: 3px solid var(--success);
-  border-radius: 13px;
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.1s;
-}
-.frameFlash.show { opacity: 1; }
-
-.camBtn {
-  width: 100%; padding: 13px;
-  background: transparent;
-  border: 1.5px dashed var(--border);
-  color: var(--muted);
-  font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 700;
-  border-radius: 11px; cursor: pointer; transition: all 0.2s;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  margin-bottom: 13px; user-select: none;
-}
-.camBtn.on { border-style: solid; border-color: var(--danger); color: var(--danger); background: rgba(255,61,61,0.05); }
-.camBtn:hover:not(.on) { border-color: var(--accent); color: var(--accent); }
-
-/* ── INPUT ROW ── */
-.inputRow { display: flex; gap: 9px; align-items: stretch; }
-.inputRow .inp {
-  flex: 1;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 16px; letter-spacing: 1px;
-}
-.btnSave {
-  padding: 0 22px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  color: #000; font-family: 'Sarabun', sans-serif;
-  font-size: 15px; font-weight: 800;
-  border: none; border-radius: 11px;
-  cursor: pointer; transition: all 0.18s;
-  white-space: nowrap; box-shadow: var(--glow);
-  user-select: none;
-}
-.btnSave:hover { transform: translateY(-1px); box-shadow: 0 5px 22px rgba(0,200,240,0.4); }
-.btnSave:active { transform: translateY(0); }
-
-.hint {
-  font-size: 12px; color: var(--muted);
-  margin-top: 9px; text-align: center; line-height: 1.6;
-}
-
-/* last scan display */
-.lastScan {
-  display: flex; align-items: center; gap: 11px;
-  background: var(--surface2);
-  border: 1.5px solid var(--border);
-  border-radius: 11px; padding: 12px 15px;
-  margin-top: 13px; min-height: 52px;
-  transition: border-color 0.3s;
-}
-.lastScan.lit { border-color: var(--success); box-shadow: 0 0 16px rgba(0,230,118,0.15); }
-.lastLabel { font-size: 10px; font-weight: 800; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
-.lastVal {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 2px; flex: 1;
-}
-.lastVal.empty { color: var(--muted); font-size: 13px; font-family: 'Sarabun', sans-serif; font-weight: 400; letter-spacing: 0; }
-
-/* ── STATUS ── */
-.status {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px; border-radius: 11px;
-  font-size: 14px; font-weight: 700;
-  transition: all 0.25s; min-height: 50px;
-}
-.status.idle    { background: var(--surface2); border: 1.5px solid var(--border); color: var(--muted); }
-.status.sending { background: rgba(255,179,0,0.09); border: 1.5px solid rgba(255,179,0,0.4); color: var(--warn); }
-.status.ok      { background: rgba(0,230,118,0.09); border: 1.5px solid rgba(0,230,118,0.4); color: var(--success); animation: pop .25s ease; }
-.status.err     { background: rgba(255,61,61,0.09); border: 1.5px solid rgba(255,61,61,0.4); color: var(--danger); }
-@keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.015)} 100%{transform:scale(1)} }
-
-.spin {
-  width: 18px; height: 18px; flex-shrink: 0;
-  border: 2.5px solid transparent; border-top-color: var(--warn);
-  border-radius: 50%; animation: ro .55s linear infinite;
-}
-@keyframes ro { to { transform: rotate(360deg); } }
-
-/* ── COUNTERS ── */
-.counters { display: flex; gap: 10px; margin: 14px 0; }
-.ctr {
-  flex: 1; background: var(--surface2);
-  border: 1.5px solid var(--border); border-radius: 12px;
-  padding: 13px; text-align: center;
-}
-.ctrN { font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 700; line-height: 1; }
-.ctrN.g { color: var(--success); }
-.ctrN.y { color: var(--warn); }
-.ctrD { font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: 1px; }
-
-/* ── LOG ── */
-.logWrap { overflow-x: auto; border-radius: 11px; border: 1.5px solid var(--border); }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-thead th {
-  background: var(--surface2); padding: 10px 12px;
-  text-align: left; font-size: 10px; font-weight: 800;
-  letter-spacing: 2px; color: var(--accent); text-transform: uppercase; white-space: nowrap;
-}
-tbody tr { border-top: 1px solid var(--border); transition: background .15s; }
-tbody tr:hover { background: var(--surface2); }
-tbody td { padding: 10px 12px; font-family: 'JetBrains Mono', monospace; color: var(--text); white-space: nowrap; }
-tbody td:first-child { color: var(--accent); font-weight: 700; }
-.noData { text-align: center; color: var(--muted); padding: 26px; font-family: 'Sarabun', sans-serif; font-size: 14px; }
-
-/* ── POPUP ── */
-.overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 999; opacity: 0; pointer-events: none; transition: opacity .2s;
-}
-.overlay.show { opacity: 1; pointer-events: all; }
-.popBox {
-  background: var(--surface);
-  border: 2.5px solid var(--danger);
-  border-radius: 22px; padding: 36px 44px; text-align: center;
-  box-shadow: 0 0 70px rgba(255,61,61,0.35);
-  transform: scale(0.8); transition: transform .2s;
-  max-width: 320px; width: 90%;
-}
-.overlay.show .popBox { transform: scale(1); }
-.popIcon { font-size: 60px; line-height: 1; margin-bottom: 12px; }
-.popTitle { font-size: 34px; font-weight: 800; color: var(--danger); letter-spacing: 3px; margin-bottom: 8px; }
-.popSub { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.5; }
-.popOk {
-  padding: 11px 32px; background: var(--danger); color: #fff;
-  font-family: 'Sarabun', sans-serif; font-size: 16px; font-weight: 800;
-  border: none; border-radius: 11px; cursor: pointer; transition: opacity .2s;
-}
-.popOk:hover { opacity: .85; }
-
-/* flash */
-.flash {
-  position: fixed; inset: 0;
-  background: rgba(0,230,118,0.06);
-  pointer-events: none; z-index: 998; opacity: 0; transition: opacity .1s;
-}
-.flash.show { opacity: 1; }
-
-/* ── APPS SCRIPT GUIDE ── */
-.guide {
-  background: rgba(255,179,0,0.07);
-  border: 1.5px solid rgba(255,179,0,0.3);
-  border-radius: 13px; padding: 15px 16px;
-  font-size: 13px; color: var(--warn);
-  margin-bottom: 14px; line-height: 1.7;
-}
-.guide strong { display: block; font-size: 14px; margin-bottom: 4px; }
-.guide code {
-  background: rgba(255,179,0,0.14); padding: 2px 7px;
-  border-radius: 5px; font-family: 'JetBrains Mono', monospace;
-  font-size: 12px; word-break: break-all;
-  display: inline-block; margin-top: 3px;
-}
-
-@media(max-width:460px){
-  .wrap { padding: 10px 10px 60px; }
-  .title { font-size: 17px; }
-  .ctrN { font-size: 24px; }
-  .btnSave { padding: 0 14px; font-size: 14px; }
-}
+  .input-field { 
+    width: 100%; padding: 12px; background: #162032; border: 1px solid var(--border); 
+    border-radius: 10px; color: #fff; font-size: 16px; margin-top: 10px;
+  }
+  .status { padding: 10px; border-radius: 10px; text-align: center; margin-top: 10px; font-size: 14px; }
+  .status.idle { background: #1c2e45; }
+  .status.success { background: rgba(0,230,118,0.2); color: var(--success); }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="logo">📦</div>
-    <div>
-      <div class="title">SCAN PACKING</div>
-      <div class="sub">ระบบสแกนและบันทึกข้อมูล</div>
-    </div>
-    <div class="clock" id="clock">--:--:--</div>
-  </div>
+<div class="card">
+  <div class="title">📦 SCAN PACKING</div>
+  
+  <input type="text" id="operator-name" class="input-field" placeholder="ชื่อผู้ปฏิบัติงาน...">
+  
+  <button id="cam-btn" class="btn btn-primary" onclick="toggleScanner()">📷 เปิดกล้องสแกน Barcode/QR</button>
 
-  <!-- APPS SCRIPT SETUP GUIDE -->
-  <div class="guide" id="guide">
-    <strong>⚙️ ต้องอัปเดต Apps Script ก่อนใช้งาน</strong>
-    เปิด Google Sheet → <b>Extensions → Apps Script</b> → ลบโค้ดเดิม → วางโค้ดด้านล่าง → <b>Deploy → New Deployment → Web App</b> (Execute as: <b>Me</b>, Access: <b>Anyone</b>) → คัดลอก URL มาวางในช่องด้านล่าง
-    <br><br>
-    <b>โค้ด Apps Script (doGet + doPost):</b>
-    <code>
-function doGet(e) {
-  return handleRequest(e.parameter);
-}
-function doPost(e) {
-  var p = JSON.parse(e.postData.contents);
-  return handleRequest(p);
-}
-function handleRequest(p) {
-  var ss = SpreadsheetApp.openById('10E8JXPKq6Bfpoxrw4EqxGUnnsPYYAgdbO_QpZnhuTtA');
-  var sheet = ss.getSheetByName('ชีต2');
-  sheet.appendRow([p.orderNo, p.time, p.date, p.name]);
-  return ContentService.createTextOutput(JSON.stringify({status:'ok'}))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-    </code>
-    <br>
-    <input id="scriptUrlInput" style="width:100%;margin-top:8px;padding:9px 12px;border-radius:9px;border:1.5px solid rgba(255,179,0,0.4);background:rgba(255,179,0,0.07);color:var(--warn);font-size:13px;outline:none;" placeholder="วาง Apps Script Web App URL ที่นี่...">
-    <button onclick="saveUrl()" style="margin-top:8px;width:100%;padding:10px;background:var(--warn);color:#000;font-family:'Sarabun',sans-serif;font-size:14px;font-weight:800;border:none;border-radius:9px;cursor:pointer;">💾 บันทึก URL</button>
-  </div>
-
-  <!-- OPERATOR NAME -->
-  <div class="card">
-    <div class="label">👤 ชื่อผู้ปฏิบัติงาน</div>
-    <input type="text" id="opName" class="inp" placeholder="กรอกชื่อผู้ปฏิบัติงาน..." autocomplete="name">
-  </div>
-
-  <!-- SCAN CARD -->
-  <div class="card">
-    <div class="label">📡 โหมดสแกน</div>
-
-    <!-- Mode buttons -->
-    <div class="modes">
-      <button class="modeBtn on" id="btnCam" onclick="setMode('cam')">📷 กล้องอุปกรณ์</button>
-      <button class="modeBtn"   id="btnExt" onclick="setMode('ext')">🔫 สแกนเนอร์ภายนอก</button>
-    </div>
-
-    <!-- Camera section -->
-    <div id="camSection">
-      <button class="camBtn" id="camToggle" onclick="toggleCam()">📷 เปิดกล้องสแกน</button>
-      <div id="camWrap">
-        <video id="videoEl" autoplay playsinline muted></video>
-        <div class="finder">
-          <div class="frame">
-            <div class="c tl"></div><div class="c tr"></div>
-            <div class="c bl"></div><div class="c br"></div>
-            <div class="line"></div>
-          </div>
-        </div>
-        <div class="frameFlash" id="frameFlash"></div>
-        <div class="camBar" id="camBar">กำลังสแกน QR / Barcode...</div>
-      </div>
-    </div>
-
-    <!-- Unified single input -->
-    <div class="inputRow">
-      <input
-        type="text" id="orderInp" class="inp"
-        placeholder="สแกนหรือกรอก Order No. ที่นี่..."
-        autocomplete="off" spellcheck="false"
-      >
-      <button class="btnSave" onclick="submitInput()">บันทึก</button>
-    </div>
-    <div class="hint" id="hint">⌨️ พิมพ์แล้วกด Enter หรือกดปุ่ม "บันทึก" &nbsp;|&nbsp; 📷 กล้องบันทึกอัตโนมัติ</div>
-
-    <!-- Last scanned -->
-    <div class="lastScan" id="lastScan">
-      <span class="lastLabel">ล่าสุด</span>
-      <span class="lastVal empty" id="lastVal">รอการสแกน...</span>
+  <div id="video-container">
+    <video id="video-preview"></video>
+    <div class="scanner-overlay">
+      <div class="target-box"><div class="scan-line"></div></div>
     </div>
   </div>
 
-  <!-- STATUS BAR -->
-  <div id="statusBar" class="status idle">
-    <span id="statusIcon">⏳</span>
-    <span id="statusTxt">พร้อมรับการสแกน</span>
-  </div>
-
-  <!-- COUNTERS -->
-  <div class="counters">
-    <div class="ctr">
-      <div class="ctrN g" id="cntOk">0</div>
-      <div class="ctrD">บันทึกสำเร็จ</div>
-    </div>
-    <div class="ctr">
-      <div class="ctrN y" id="cntDup">0</div>
-      <div class="ctrD">สแกนซ้ำ</div>
-    </div>
-  </div>
-
-  <!-- LOG -->
-  <div class="card">
-    <div class="label" style="display:flex;justify-content:space-between;align-items:center;width:100%">
-      <span>📋 ประวัติการสแกน</span>
-      <button onclick="clearAll()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;margin-left:auto;">ล้างทั้งหมด</button>
-    </div>
-    <div class="logWrap">
-      <table>
-        <thead>
-          <tr><th>Order No.</th><th>เวลา</th><th>วันที่</th><th>ชื่อ</th><th>สถานะ</th></tr>
-        </thead>
-        <tbody id="logBody">
-          <tr><td colspan="5" class="noData">ยังไม่มีการสแกน</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-</div><!-- /wrap -->
-
-<!-- DUPLICATE POPUP -->
-<div class="overlay" id="overlay">
-  <div class="popBox">
-    <div class="popIcon">🚫</div>
-    <div class="popTitle">แพ็คซ้ำ</div>
-    <div class="popSub" id="popSub">Order นี้ถูกสแกนแล้วในเซสชันนี้</div>
-    <button class="popOk" onclick="closePop()">ตกลง</button>
-  </div>
+  <input type="text" id="order-input" class="input-field" placeholder="สแกนหรือพิมพ์เลข Order...">
 </div>
 
-<div class="flash" id="flash"></div>
+<div id="status-bar" class="status idle">พร้อมใช้งาน</div>
 
 <script>
-// ─────────────────────────────────────────
-//  CONFIG  (hardcoded script URL + saved override)
-// ─────────────────────────────────────────
-let SCRIPT_URL = localStorage.getItem('gasUrl') ||
-  'https://script.google.com/macros/s/AKfycbwFaC5E-cplXXO9HzLy8KQpsQJApwht1KYiU90DtSfr4DWlY5FpOwYiMVDXgpKqQ1a5/exec';
-
-// If URL is already saved/hardcoded, hide the guide
-if (localStorage.getItem('gasUrl')) hideGuide();
-
-function saveUrl() {
-  const v = document.getElementById('scriptUrlInput').value.trim();
-  if (!v) return;
-  SCRIPT_URL = v;
-  localStorage.setItem('gasUrl', v);
-  hideGuide();
-  setStatus('ok','✅','บันทึก URL สำเร็จ — พร้อมใช้งาน');
-  setTimeout(()=>setStatus('idle','⏳','พร้อมรับการสแกน'),2500);
-}
-function hideGuide() {
-  document.getElementById('guide').style.display = 'none';
-}
-
-// ─────────────────────────────────────────
-//  STATE
-// ─────────────────────────────────────────
-let mode = 'cam';
-let camOn = false;
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFaC5E-cplXXO9HzLy8KQpsQJApwht1KYiU90DtSfr4DWlY5FpOwYiMVDXgpKqQ1a5/exec';
 let codeReader = null;
-let lastCamMs = 0;
-let scanned = new Set();
-let cntOk = 0, cntDup = 0;
-let logs = [];
+let isScanning = false;
 
-// ─────────────────────────────────────────
-//  INIT
-// ─────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  tick(); setInterval(tick, 1000);
+async function toggleScanner() {
+  const container = document.getElementById('video-container');
+  const btn = document.getElementById('cam-btn');
 
-  const name = localStorage.getItem('opName');
-  if (name) document.getElementById('opName').value = name;
-  document.getElementById('opName').addEventListener('input', e =>
-    localStorage.setItem('opName', e.target.value));
-
-  const inp = document.getElementById('orderInp');
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); submitInput(); }
-  });
-
-  // keep focus in external mode
-  document.addEventListener('click', e => {
-    if (mode === 'ext' && e.target !== inp && !e.target.closest('button') && !e.target.closest('.overlay')) {
-      setTimeout(() => inp.focus(), 60);
-    }
-  });
-});
-
-// ─────────────────────────────────────────
-//  CLOCK — Thailand UTC+7
-// ─────────────────────────────────────────
-function tick() {
-  const t = thaiNow();
-  document.getElementById('clock').textContent =
-    `${pad(t.h)}:${pad(t.m)}:${pad(t.s)}`;
-}
-function thaiNow() {
-  const n = new Date();
-  const ms = n.getTime() + n.getTimezoneOffset()*60000 + 7*3600000;
-  const d = new Date(ms);
-  return { h:d.getHours(), m:d.getMinutes(), s:d.getSeconds(),
-           dd:d.getDate(), mo:d.getMonth()+1, yy:d.getFullYear() };
-}
-function thaiDate() { const t=thaiNow(); return `${pad(t.dd)}/${pad(t.mo)}/${t.yy}`; }
-function thaiTime() { const t=thaiNow(); return `${pad(t.h)}:${pad(t.m)}:${pad(t.s)}`; }
-function pad(n) { return String(n).padStart(2,'0'); }
-
-// ─────────────────────────────────────────
-//  MODE
-// ─────────────────────────────────────────
-function setMode(m) {
-  mode = m;
-  document.getElementById('btnCam').classList.toggle('on', m==='cam');
-  document.getElementById('btnExt').classList.toggle('on', m==='ext');
-  document.getElementById('camSection').style.display = m==='cam' ? 'block' : 'none';
-
-  if (m === 'ext') {
-    document.getElementById('hint').textContent =
-      '🔫 โฟกัสที่ช่องนี้แล้วสแกน — กด Enter อัตโนมัติ | ⌨️ หรือพิมพ์แล้วกด Enter';
-    if (camOn) stopCam();
-    setTimeout(() => document.getElementById('orderInp').focus(), 80);
-  } else {
-    document.getElementById('hint').textContent =
-      '⌨️ พิมพ์แล้วกด Enter หรือกดปุ่ม "บันทึก" | 📷 กล้องบันทึกอัตโนมัติ';
+  if (isScanning) {
+    stopScanner();
+    return;
   }
-}
 
-// ─────────────────────────────────────────
-//  CAMERA — using ZXing BrowserMultiFormatReader
-// ─────────────────────────────────────────
-async function toggleCam() { camOn ? stopCam() : await startCam(); }
-
-async function startCam() {
   try {
-    // Check ZXing is loaded
-    if (!window.ZXingBrowser) {
-      setStatus('err','❌','ไม่สามารถโหลดไลบรารีสแกน กรุณารีเฟรช');
-      return;
-    }
+    isScanning = true;
+    container.style.display = 'block';
+    btn.textContent = '⏹ ปิดกล้อง';
+    btn.className = 'btn btn-stop';
 
-    codeReader = new ZXingBrowser.BrowserMultiFormatReader(null, {
-      delayBetweenScanAttempts: 200,
-      delayBetweenScanSuccess: 2000,
-    });
+    // สร้าง Reader รองรับทุกรูปแบบ (QR + Barcode)
+    codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+    
+    // ค้นหากล้องหลัง
+    const videoInputDevices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+    const selectedDeviceId = videoInputDevices.length > 1 ? videoInputDevices[1].deviceId : videoInputDevices[0].deviceId;
 
-    // Get camera list and prefer back camera
-    const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-    let deviceId = undefined;
-    if (devices.length > 1) {
-      // Prefer back/environment camera
-      const back = devices.find(d =>
-        /back|rear|environment/i.test(d.label) ||
-        d.label === '' // on mobile, unnamed = usually back
-      );
-      if (back) deviceId = back.deviceId;
-      else deviceId = devices[devices.length - 1].deviceId; // usually back on mobile
-    }
+    const videoEl = document.getElementById('video-preview');
 
-    const videoEl = document.getElementById('videoEl');
-
-    await codeReader.decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
+    // เริ่มสแกนแบบ Real-time
+    await codeReader.decodeFromVideoDevice(selectedDeviceId, videoEl, (result, err) => {
       if (result) {
-        const now = Date.now();
-        if (now - lastCamMs < 2000) return;
-        lastCamMs = now;
-        flashFrame();
-        processOrder(result.getText().trim());
+        document.getElementById('order-input').value = result.getText();
+        processOrder(result.getText());
+        
+        // ใส่ Feedback สั้นๆ ว่าสแกนติด
+        vibratePhone(); 
       }
     });
 
-    camOn = true;
-    document.getElementById('camWrap').classList.add('show');
-    document.getElementById('camToggle').textContent = '⏹ หยุดกล้อง';
-    document.getElementById('camToggle').classList.add('on');
-    document.getElementById('camBar').textContent = 'กำลังสแกน QR / Barcode...';
-
-  } catch(err) {
+  } catch (err) {
     console.error(err);
-    setStatus('err','❌',`กล้อง: ${err.message}`);
+    alert('ไม่สามารถเปิดกล้องได้: ' + err.message);
+    stopScanner();
   }
 }
 
-function stopCam() {
-  if (codeReader) { try { codeReader.reset(); } catch(e){} codeReader = null; }
-  camOn = false;
-  document.getElementById('camWrap').classList.remove('show');
-  document.getElementById('camToggle').textContent = '📷 เปิดกล้องสแกน';
-  document.getElementById('camToggle').classList.remove('on');
-}
-
-function flashFrame() {
-  const el = document.getElementById('frameFlash');
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 400);
-}
-
-// ─────────────────────────────────────────
-//  SUBMIT FROM INPUT BOX
-// ─────────────────────────────────────────
-function submitInput() {
-  const inp = document.getElementById('orderInp');
-  const val = inp.value.trim();
-  if (!val) return;
-  processOrder(val);
-  inp.value = '';
-  inp.focus();
-}
-
-// ─────────────────────────────────────────
-//  PROCESS ORDER
-// ─────────────────────────────────────────
-function processOrder(orderNo) {
-  if (!orderNo) return;
-  if (scanned.has(orderNo)) {
-    cntDup++;
-    document.getElementById('cntDup').textContent = cntDup;
-    showPop(orderNo);
-    return;
+function stopScanner() {
+  if (codeReader) {
+    codeReader.reset();
+    codeReader = null;
   }
-  sendToSheet(orderNo);
+  isScanning = false;
+  document.getElementById('video-container').style.display = 'none';
+  const btn = document.getElementById('cam-btn');
+  btn.textContent = '📷 เปิดกล้องสแกน Barcode/QR';
+  btn.className = 'btn btn-primary';
 }
 
-// ─────────────────────────────────────────
-//  SEND TO GOOGLE SHEETS
-//  Uses GET with URL params — more CORS-friendly than POST for Apps Script
-// ─────────────────────────────────────────
-async function sendToSheet(orderNo) {
-  const name = document.getElementById('opName').value.trim();
-  const date = thaiDate();
-  const time = thaiTime();
+function vibratePhone() {
+  if (navigator.vibrate) navigator.vibrate(100);
+}
 
-  scanned.add(orderNo); // lock immediately
-
-  // Update UI
-  const lv = document.getElementById('lastVal');
-  lv.textContent = orderNo; lv.classList.remove('empty');
-  const ls = document.getElementById('lastScan');
-  ls.classList.add('lit');
-  setTimeout(()=>ls.classList.remove('lit'), 2000);
-
-  setStatus('sending','<div class="spin"></div>',`กำลังบันทึก ${orderNo}...`);
-
-  const params = new URLSearchParams({ orderNo, time, date, name });
-  const url = `${SCRIPT_URL}?${params.toString()}`;
+async function processOrder(orderNo) {
+  const status = document.getElementById('status-bar');
+  const name = document.getElementById('operator-name').value;
+  
+  status.textContent = "⌛ กำลังส่งข้อมูล: " + orderNo;
+  status.className = "status idle";
 
   try {
-    // Use fetch with no-cors for GET — Apps Script doGet handles this fine
-    await fetch(url, { method:'GET', mode:'no-cors' });
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({
+        orderNo: orderNo,
+        name: name,
+        time: new Date().toLocaleTimeString(),
+        date: new Date().toLocaleDateString()
+      })
+    });
 
-    cntOk++;
-    document.getElementById('cntOk').textContent = cntOk;
-    setStatus('ok','✅',`บันทึกสำเร็จ: ${orderNo}`);
-    doFlash();
-    addLog(orderNo, time, date, name, 'ok');
-    setTimeout(()=>setStatus('idle','⏳','พร้อมรับการสแกน'), 2500);
-
-  } catch(err) {
-    // Network error — allow retry
-    scanned.delete(orderNo);
-    setStatus('err','❌',`เชื่อมต่อไม่ได้: ${err.message}`);
-    addLog(orderNo, time, date, name, 'err');
-    console.error('Fetch error:', err);
+    status.textContent = "✅ บันทึกสำเร็จ: " + orderNo;
+    status.className = "status success";
+    
+    // ถ้าสแกนผ่านกล้อง อาจจะอยากให้หยุดแป๊บนึงค่อยสแกนต่อ (กันซ้ำ)
+    // หรือถ้าอยากให้สแกนรัวๆ ก็ไม่ต้องใส่หน่วงเวลาครับ
+  } catch (err) {
+    status.textContent = "❌ ผิดพลาด: " + err.message;
+    status.className = "status idle";
   }
 }
 
-// ─────────────────────────────────────────
-//  UI
-// ─────────────────────────────────────────
-function setStatus(type, icon, txt) {
-  document.getElementById('statusBar').className = 'status ' + type;
-  document.getElementById('statusIcon').innerHTML = icon;
-  document.getElementById('statusTxt').textContent = txt;
-}
-
-function showPop(orderNo) {
-  document.getElementById('popSub').textContent = `"${orderNo}" ถูกสแกนแล้วในเซสชันนี้`;
-  document.getElementById('overlay').classList.add('show');
-  setStatus('err','⚠️',`แพ็คซ้ำ: ${orderNo}`);
-  setTimeout(()=>setStatus('idle','⏳','พร้อมรับการสแกน'), 3500);
-}
-function closePop() {
-  document.getElementById('overlay').classList.remove('show');
-  if (mode==='ext') document.getElementById('orderInp').focus();
-}
-
-function doFlash() {
-  const el = document.getElementById('flash');
-  el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'), 350);
-}
-
-function addLog(orderNo, time, date, name, status) {
-  logs.unshift({ orderNo, time, date, name, status });
-  document.getElementById('logBody').innerHTML = logs.slice(0,50).map(e=>`
-    <tr>
-      <td>${e.orderNo}</td>
-      <td>${e.time}</td>
-      <td>${e.date}</td>
-      <td>${e.name||'-'}</td>
-      <td style="color:${e.status==='ok'?'var(--success)':'var(--danger)'}">
-        ${e.status==='ok'?'✅ สำเร็จ':'❌ ผิดพลาด'}
-      </td>
-    </tr>`).join('');
-}
-
-function clearAll() {
-  logs=[]; scanned.clear(); cntOk=0; cntDup=0;
-  document.getElementById('cntOk').textContent='0';
-  document.getElementById('cntDup').textContent='0';
-  document.getElementById('lastVal').textContent='รอการสแกน...';
-  document.getElementById('lastVal').classList.add('empty');
-  document.getElementById('logBody').innerHTML='<tr><td colspan="5" class="noData">ยังไม่มีการสแกน</td></tr>';
-  setStatus('idle','⏳','พร้อมรับการสแกน');
-}
-
-document.getElementById('overlay').addEventListener('click', function(e){
-  if(e.target===this) closePop();
+// รองรับการพิมพ์เลขเองแล้วกด Enter
+document.getElementById('order-input').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    processOrder(e.target.value);
+    e.target.value = '';
+  }
 });
-document.addEventListener('keydown', e => { if(e.key==='Escape') closePop(); });
 </script>
 </body>
 </html>
