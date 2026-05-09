@@ -667,29 +667,7 @@ async function startCamera() {
     document.getElementById('cam-toggle').classList.add('active');
     document.getElementById('cam-status').textContent = 'กำลังเริ่มต้นกล้อง...';
 
-    // ── ตั้งค่า hints เพื่อเพิ่มความเร็ว decode ──
-    const hints = new Map();
-
-    // จำกัดประเภทที่ต้องใช้จริง → ลด overhead
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXing.BarcodeFormat.QR_CODE,
-      ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.EAN_13,
-      ZXing.BarcodeFormat.EAN_8,
-      ZXing.BarcodeFormat.UPC_A,
-      ZXing.BarcodeFormat.UPC_E,
-      ZXing.BarcodeFormat.DATA_MATRIX,
-      ZXing.BarcodeFormat.ITF,
-    ]);
-
-    // พยายามอ่านรูปที่หมุนแล้ว (ช่วยจับ barcode แนวนอน)
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-    zxingReader = new ZXing.BrowserMultiFormatReader(hints, {
-      delayBetweenScanAttempts: 80,   // ms ระหว่างแต่ละเฟรม (ค่าเริ่มต้น 500ms → เร็วขึ้น ~6x)
-      delayBetweenScanSuccess: 800,   // ms หลังอ่านสำเร็จก่อน scan ต่อ
-    });
+    zxingReader = new ZXing.BrowserMultiFormatReader();
 
     // ดึง device list แล้วเลือกกล้องหลัง (environment)
     const devices = await zxingReader.listVideoInputDevices();
@@ -702,9 +680,6 @@ async function startCamera() {
     }
 
     const videoEl = document.getElementById('video-preview');
-
-    // ขอกล้องความละเอียดสูงขึ้น → อ่าน barcode เล็กได้ดีขึ้น
-    zxingReader.hints = hints;
 
     await zxingReader.decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
       if (result) {
