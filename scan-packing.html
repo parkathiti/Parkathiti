@@ -4,720 +4,778 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SCAN PACKING</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<!-- ZXing: far more reliable QR + Barcode reader than jsQR -->
+<script src="https://unpkg.com/@zxing/browser@latest/umd/index.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
 
-  :root {
-    --bg: #0a0f1e;
-    --surface: #111827;
-    --surface2: #1a2235;
-    --border: #1e2d45;
-    --accent: #00d4ff;
-    --accent2: #0088cc;
-    --success: #00e676;
-    --warning: #ffab00;
-    --danger: #ff4444;
-    --text: #e8f0fe;
-    --text-muted: #6b7fa3;
-    --glow: 0 0 20px rgba(0,212,255,0.3);
-  }
+:root {
+  --bg: #060d1a;
+  --surface: #0e1826;
+  --surface2: #162032;
+  --border: #1c2e45;
+  --accent: #00c8f0;
+  --accent2: #0077bb;
+  --success: #00e676;
+  --warn: #ffb300;
+  --danger: #ff3d3d;
+  --text: #ddeeff;
+  --muted: #4a6080;
+  --glow: 0 0 24px rgba(0,200,240,0.25);
+}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-  body {
-    font-family: 'Sarabun', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+body {
+  font-family: 'Sarabun', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
 
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
+/* grid bg */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    linear-gradient(rgba(0,200,240,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,200,240,0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none; z-index: 0;
+}
 
-  .app-wrapper {
-    position: relative;
-    z-index: 1;
-    max-width: 700px;
-    margin: 0 auto;
-    padding: 16px;
-    padding-bottom: 40px;
-  }
+.wrap {
+  position: relative; z-index: 1;
+  max-width: 680px; margin: 0 auto;
+  padding: 14px 14px 60px;
+}
 
-  .header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 20px 0 16px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 20px;
-  }
-  .header-icon {
-    width: 44px; height: 44px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-    box-shadow: var(--glow);
-    flex-shrink: 0;
-  }
-  .header-title {
-    font-size: 22px; font-weight: 800; letter-spacing: 2px;
-    background: linear-gradient(90deg, var(--accent), #fff);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .header-sub { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; }
-  .live-clock {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14px; color: var(--accent);
-    margin-left: auto; white-space: nowrap;
-  }
+/* ── HEADER ── */
+.header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 0 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+.logo {
+  width: 46px; height: 46px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; box-shadow: var(--glow);
+}
+.title { font-size: 21px; font-weight: 800; letter-spacing: 3px;
+  background: linear-gradient(90deg, var(--accent) 30%, #fff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; margin-top: 1px; }
+.clock {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px; color: var(--accent);
+  white-space: nowrap; letter-spacing: 1px;
+}
 
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 16px;
-    position: relative;
-    overflow: hidden;
-  }
-  .card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: 0.5;
-  }
-  .card-label {
-    font-size: 11px; font-weight: 700; letter-spacing: 2px;
-    color: var(--accent); text-transform: uppercase;
-    margin-bottom: 12px;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .card-label::before {
-    content: '';
-    width: 8px; height: 8px;
-    background: var(--accent);
-    border-radius: 50%;
-    box-shadow: 0 0 8px var(--accent);
-  }
+/* ── CARD ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 14px;
+  position: relative; overflow: hidden;
+}
+.card::after {
+  content: '';
+  position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.4;
+}
+.label {
+  font-size: 10px; font-weight: 800; letter-spacing: 2.5px;
+  color: var(--accent); text-transform: uppercase;
+  margin-bottom: 11px;
+  display: flex; align-items: center; gap: 7px;
+}
+.label::before {
+  content: ''; width: 7px; height: 7px;
+  background: var(--accent); border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent); flex-shrink: 0;
+}
 
-  .input-field {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    font-family: 'Sarabun', sans-serif;
-    font-size: 15px;
-    padding: 12px 16px;
-    outline: none;
-    transition: all 0.2s;
-  }
-  .input-field:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(0,212,255,0.12);
-  }
-  .input-field::placeholder { color: var(--text-muted); }
+/* ── INPUTS ── */
+.inp {
+  width: 100%;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  color: var(--text);
+  font-family: 'Sarabun', sans-serif;
+  font-size: 15px; padding: 12px 15px;
+  outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+}
+.inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,200,240,0.1); }
+.inp::placeholder { color: var(--muted); }
 
-  .mode-toggle {
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 8px; margin-bottom: 16px;
-  }
-  .mode-btn {
-    padding: 12px; border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    color: var(--text-muted);
-    font-family: 'Sarabun', sans-serif;
-    font-size: 14px; font-weight: 600;
-    cursor: pointer; transition: all 0.2s;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-  }
-  .mode-btn.active {
-    background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(0,136,204,0.15));
-    border-color: var(--accent); color: var(--accent); box-shadow: var(--glow);
-  }
-  .mode-btn:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
+/* ── MODE TOGGLE ── */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.modeBtn {
+  padding: 11px 8px; border-radius: 11px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  user-select: none;
+}
+.modeBtn.on {
+  background: linear-gradient(135deg, rgba(0,200,240,0.14), rgba(0,119,187,0.14));
+  border-color: var(--accent); color: var(--accent); box-shadow: var(--glow);
+}
+.modeBtn:hover:not(.on) { border-color: var(--muted); color: var(--text); }
 
-  #camera-container {
-    position: relative; width: 100%; background: #000;
-    border-radius: 12px; overflow: hidden; display: none;
-    border: 1px solid var(--border); margin-bottom: 14px;
-  }
-  #camera-container.active { display: block; }
-  #video-preview { width: 100%; display: block; max-height: 260px; object-fit: cover; }
-  #scan-canvas { display: none; }
+/* ── CAMERA ── */
+#camWrap {
+  position: relative; width: 100%;
+  background: #000; border-radius: 13px;
+  overflow: hidden; border: 1.5px solid var(--border);
+  display: none; margin-bottom: 13px;
+}
+#camWrap.show { display: block; }
 
-  .scan-overlay {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    pointer-events: none;
-  }
-  .scan-frame { width: 190px; height: 190px; position: relative; }
-  .scan-frame::before, .scan-frame::after,
-  .scan-frame .corner-br, .scan-frame .corner-bl {
-    content: ''; position: absolute;
-    width: 28px; height: 28px;
-    border-color: var(--accent); border-style: solid;
-  }
-  .scan-frame::before { top:0;left:0;border-width:3px 0 0 3px; }
-  .scan-frame::after  { top:0;right:0;border-width:3px 3px 0 0; }
-  .scan-frame .corner-br { bottom:0;right:0;border-width:0 3px 3px 0; }
-  .scan-frame .corner-bl { bottom:0;left:0;border-width:0 0 3px 3px; }
-  .scan-line {
-    position: absolute; left: 4px; right: 4px; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: scan-move 2s ease-in-out infinite;
-    box-shadow: 0 0 10px var(--accent);
-  }
-  @keyframes scan-move { 0%{top:8px} 50%{top:178px} 100%{top:8px} }
-  .cam-status {
-    position: absolute; bottom:0;left:0;right:0;
-    background: rgba(0,0,0,0.65); padding: 7px;
-    text-align: center; font-size: 12px;
-    color: var(--accent); letter-spacing: 1px;
-  }
+#videoEl {
+  width: 100%; display: block;
+  max-height: 300px; object-fit: cover;
+}
 
-  .cam-toggle-btn {
-    width: 100%; padding: 13px;
-    background: transparent;
-    border: 1px dashed var(--border);
-    color: var(--text-muted);
-    font-family: 'Sarabun', sans-serif;
-    font-size: 14px; font-weight: 600;
-    border-radius: 10px; cursor: pointer;
-    transition: all 0.2s;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    margin-bottom: 14px;
-  }
-  .cam-toggle-btn.active { border-color: var(--danger); color: var(--danger); background: rgba(255,68,68,0.05); border-style:solid; }
-  .cam-toggle-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+.finder {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.frame {
+  width: 210px; height: 210px; position: relative;
+}
+.frame .c { position: absolute; width: 32px; height: 32px; border: 3px solid var(--accent); }
+.frame .tl { top:0; left:0; border-right:none; border-bottom:none; }
+.frame .tr { top:0; right:0; border-left:none; border-bottom:none; }
+.frame .bl { bottom:0; left:0; border-right:none; border-top:none; }
+.frame .br { bottom:0; right:0; border-left:none; border-top:none; }
+.line {
+  position: absolute; left: 6px; right: 6px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 12px var(--accent);
+  animation: sweep 2s ease-in-out infinite;
+}
+@keyframes sweep { 0%{top:8px} 50%{top:195px} 100%{top:8px} }
 
-  .order-input-row {
-    display: flex; gap: 10px; align-items: stretch;
-  }
-  .order-input-row .input-field {
-    flex: 1;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 16px; letter-spacing: 1px;
-  }
-  .btn-submit {
-    padding: 12px 22px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    color: #000; font-family: 'Sarabun', sans-serif;
-    font-size: 15px; font-weight: 700;
-    border: none; border-radius: 10px;
-    cursor: pointer; transition: all 0.2s;
-    white-space: nowrap; box-shadow: var(--glow);
-  }
-  .btn-submit:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,255,0.4); }
-  .btn-submit:active { transform: translateY(0); }
+.camBar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.7); padding: 8px;
+  text-align: center; font-size: 12px; color: var(--accent); letter-spacing: 1px;
+}
 
-  .input-hint {
-    font-size: 12px; color: var(--text-muted);
-    margin-top: 8px; text-align: center; line-height: 1.5;
-  }
+/* scan result flash on frame */
+.frameFlash {
+  position: absolute; inset: 0;
+  border: 3px solid var(--success);
+  border-radius: 13px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.1s;
+}
+.frameFlash.show { opacity: 1; }
 
-  .order-display {
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 12px 16px;
-    display: flex; align-items: center; gap: 12px;
-    margin-top: 14px; min-height: 50px;
-  }
-  .order-label {
-    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
-    color: var(--text-muted); text-transform: uppercase; white-space: nowrap;
-  }
-  .order-value {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 18px; font-weight: 700;
-    color: var(--accent); letter-spacing: 2px; flex: 1;
-  }
-  .order-value.empty {
-    color: var(--text-muted); font-size: 14px;
-    font-family: 'Sarabun', sans-serif; font-weight: 400; letter-spacing: 0;
-  }
+.camBtn {
+  width: 100%; padding: 13px;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  color: var(--muted);
+  font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 700;
+  border-radius: 11px; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 13px; user-select: none;
+}
+.camBtn.on { border-style: solid; border-color: var(--danger); color: var(--danger); background: rgba(255,61,61,0.05); }
+.camBtn:hover:not(.on) { border-color: var(--accent); color: var(--accent); }
 
-  .status-bar {
-    display: flex; align-items: center; gap: 10px;
-    padding: 12px 16px; border-radius: 10px;
-    font-size: 14px; font-weight: 600;
-    transition: all 0.3s; min-height: 48px;
-  }
-  .status-bar.idle   { background:var(--surface2); border:1px solid var(--border); color:var(--text-muted); }
-  .status-bar.sending{ background:rgba(255,171,0,0.1); border:1px solid rgba(255,171,0,0.4); color:var(--warning); }
-  .status-bar.success{ background:rgba(0,230,118,0.1); border:1px solid rgba(0,230,118,0.4); color:var(--success); animation:flash-s 0.3s ease; }
-  .status-bar.error  { background:rgba(255,68,68,0.1); border:1px solid rgba(255,68,68,0.4); color:var(--danger); }
-  @keyframes flash-s { 0%{transform:scale(1)} 50%{transform:scale(1.02)} 100%{transform:scale(1)} }
+/* ── INPUT ROW ── */
+.inputRow { display: flex; gap: 9px; align-items: stretch; }
+.inputRow .inp {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; letter-spacing: 1px;
+}
+.btnSave {
+  padding: 0 22px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #000; font-family: 'Sarabun', sans-serif;
+  font-size: 15px; font-weight: 800;
+  border: none; border-radius: 11px;
+  cursor: pointer; transition: all 0.18s;
+  white-space: nowrap; box-shadow: var(--glow);
+  user-select: none;
+}
+.btnSave:hover { transform: translateY(-1px); box-shadow: 0 5px 22px rgba(0,200,240,0.4); }
+.btnSave:active { transform: translateY(0); }
 
-  .spinner {
-    width:18px;height:18px;border:2px solid transparent;
-    border-top-color:var(--warning);border-radius:50%;
-    animation:spin 0.6s linear infinite;flex-shrink:0;
-  }
-  @keyframes spin{to{transform:rotate(360deg)}}
+.hint {
+  font-size: 12px; color: var(--muted);
+  margin-top: 9px; text-align: center; line-height: 1.6;
+}
 
-  .counter-row { display:flex; gap:10px; margin-top:16px; margin-bottom:16px; }
-  .counter-card {
-    flex:1; background:var(--surface2);
-    border:1px solid var(--border); border-radius:10px;
-    padding:12px; text-align:center;
-  }
-  .counter-num { font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:700; line-height:1; }
-  .counter-num.success-num { color:var(--success); }
-  .counter-num.skip-num    { color:var(--warning); }
-  .counter-desc { font-size:11px; color:var(--text-muted); margin-top:4px; letter-spacing:1px; }
+/* last scan display */
+.lastScan {
+  display: flex; align-items: center; gap: 11px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 11px; padding: 12px 15px;
+  margin-top: 13px; min-height: 52px;
+  transition: border-color 0.3s;
+}
+.lastScan.lit { border-color: var(--success); box-shadow: 0 0 16px rgba(0,230,118,0.15); }
+.lastLabel { font-size: 10px; font-weight: 800; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+.lastVal {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 2px; flex: 1;
+}
+.lastVal.empty { color: var(--muted); font-size: 13px; font-family: 'Sarabun', sans-serif; font-weight: 400; letter-spacing: 0; }
 
-  .log-table-wrap { overflow-x:auto; border-radius:10px; border:1px solid var(--border); }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  thead th {
-    background:var(--surface2); padding:10px 12px;
-    text-align:left; font-size:11px; font-weight:700;
-    letter-spacing:1.5px; color:var(--accent); text-transform:uppercase; white-space:nowrap;
-  }
-  tbody tr { border-top:1px solid var(--border); transition:background 0.15s; }
-  tbody tr:hover { background:var(--surface2); }
-  tbody td { padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text); white-space:nowrap; }
-  tbody td:first-child { color:var(--accent); font-weight:700; }
-  .empty-log { text-align:center; color:var(--text-muted); padding:24px; font-family:'Sarabun',sans-serif; font-size:14px; }
+/* ── STATUS ── */
+.status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: 11px;
+  font-size: 14px; font-weight: 700;
+  transition: all 0.25s; min-height: 50px;
+}
+.status.idle    { background: var(--surface2); border: 1.5px solid var(--border); color: var(--muted); }
+.status.sending { background: rgba(255,179,0,0.09); border: 1.5px solid rgba(255,179,0,0.4); color: var(--warn); }
+.status.ok      { background: rgba(0,230,118,0.09); border: 1.5px solid rgba(0,230,118,0.4); color: var(--success); animation: pop .25s ease; }
+.status.err     { background: rgba(255,61,61,0.09); border: 1.5px solid rgba(255,61,61,0.4); color: var(--danger); }
+@keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.015)} 100%{transform:scale(1)} }
 
-  .popup-overlay {
-    position:fixed; inset:0; background:rgba(0,0,0,0.75);
-    display:flex; align-items:center; justify-content:center;
-    z-index:1000; opacity:0; pointer-events:none;
-    transition:opacity 0.2s; backdrop-filter:blur(4px);
-  }
-  .popup-overlay.show { opacity:1; pointer-events:all; }
-  .popup-box {
-    background:var(--surface); border:2px solid var(--danger);
-    border-radius:20px; padding:32px 40px; text-align:center;
-    box-shadow:0 0 60px rgba(255,68,68,0.3);
-    transform:scale(0.8); transition:transform 0.2s;
-    max-width:320px; width:90%;
-  }
-  .popup-overlay.show .popup-box { transform:scale(1); }
-  .popup-emoji { font-size:56px; line-height:1; margin-bottom:12px; }
-  .popup-title { font-size:32px; font-weight:800; color:var(--danger); letter-spacing:2px; margin-bottom:8px; }
-  .popup-sub { font-size:14px; color:var(--text-muted); margin-bottom:20px; }
-  .popup-close {
-    padding:10px 28px; background:var(--danger); color:#fff;
-    font-family:'Sarabun',sans-serif; font-size:15px; font-weight:700;
-    border:none; border-radius:10px; cursor:pointer;
-  }
-  .popup-close:hover { opacity:0.85; }
+.spin {
+  width: 18px; height: 18px; flex-shrink: 0;
+  border: 2.5px solid transparent; border-top-color: var(--warn);
+  border-radius: 50%; animation: ro .55s linear infinite;
+}
+@keyframes ro { to { transform: rotate(360deg); } }
 
-  .success-flash {
-    position:fixed; inset:0; background:rgba(0,230,118,0.07);
-    pointer-events:none; z-index:999; opacity:0; transition:opacity 0.1s;
-  }
-  .success-flash.show { opacity:1; }
+/* ── COUNTERS ── */
+.counters { display: flex; gap: 10px; margin: 14px 0; }
+.ctr {
+  flex: 1; background: var(--surface2);
+  border: 1.5px solid var(--border); border-radius: 12px;
+  padding: 13px; text-align: center;
+}
+.ctrN { font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 700; line-height: 1; }
+.ctrN.g { color: var(--success); }
+.ctrN.y { color: var(--warn); }
+.ctrD { font-size: 11px; color: var(--muted); margin-top: 4px; letter-spacing: 1px; }
 
-  @media(max-width:480px){
-    .app-wrapper{padding:12px;}
-    .header-title{font-size:18px;}
-    .counter-num{font-size:22px;}
-    .btn-submit{padding:12px 14px;font-size:14px;}
-  }
+/* ── LOG ── */
+.logWrap { overflow-x: auto; border-radius: 11px; border: 1.5px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--surface2); padding: 10px 12px;
+  text-align: left; font-size: 10px; font-weight: 800;
+  letter-spacing: 2px; color: var(--accent); text-transform: uppercase; white-space: nowrap;
+}
+tbody tr { border-top: 1px solid var(--border); transition: background .15s; }
+tbody tr:hover { background: var(--surface2); }
+tbody td { padding: 10px 12px; font-family: 'JetBrains Mono', monospace; color: var(--text); white-space: nowrap; }
+tbody td:first-child { color: var(--accent); font-weight: 700; }
+.noData { text-align: center; color: var(--muted); padding: 26px; font-family: 'Sarabun', sans-serif; font-size: 14px; }
+
+/* ── POPUP ── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999; opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.overlay.show { opacity: 1; pointer-events: all; }
+.popBox {
+  background: var(--surface);
+  border: 2.5px solid var(--danger);
+  border-radius: 22px; padding: 36px 44px; text-align: center;
+  box-shadow: 0 0 70px rgba(255,61,61,0.35);
+  transform: scale(0.8); transition: transform .2s;
+  max-width: 320px; width: 90%;
+}
+.overlay.show .popBox { transform: scale(1); }
+.popIcon { font-size: 60px; line-height: 1; margin-bottom: 12px; }
+.popTitle { font-size: 34px; font-weight: 800; color: var(--danger); letter-spacing: 3px; margin-bottom: 8px; }
+.popSub { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.5; }
+.popOk {
+  padding: 11px 32px; background: var(--danger); color: #fff;
+  font-family: 'Sarabun', sans-serif; font-size: 16px; font-weight: 800;
+  border: none; border-radius: 11px; cursor: pointer; transition: opacity .2s;
+}
+.popOk:hover { opacity: .85; }
+
+/* flash */
+.flash {
+  position: fixed; inset: 0;
+  background: rgba(0,230,118,0.06);
+  pointer-events: none; z-index: 998; opacity: 0; transition: opacity .1s;
+}
+.flash.show { opacity: 1; }
+
+/* ── APPS SCRIPT GUIDE ── */
+.guide {
+  background: rgba(255,179,0,0.07);
+  border: 1.5px solid rgba(255,179,0,0.3);
+  border-radius: 13px; padding: 15px 16px;
+  font-size: 13px; color: var(--warn);
+  margin-bottom: 14px; line-height: 1.7;
+}
+.guide strong { display: block; font-size: 14px; margin-bottom: 4px; }
+.guide code {
+  background: rgba(255,179,0,0.14); padding: 2px 7px;
+  border-radius: 5px; font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; word-break: break-all;
+  display: inline-block; margin-top: 3px;
+}
+
+@media(max-width:460px){
+  .wrap { padding: 10px 10px 60px; }
+  .title { font-size: 17px; }
+  .ctrN { font-size: 24px; }
+  .btnSave { padding: 0 14px; font-size: 14px; }
+}
 </style>
 </head>
 <body>
-<div class="app-wrapper">
+<div class="wrap">
 
+  <!-- HEADER -->
   <div class="header">
-    <div class="header-icon">📦</div>
+    <div class="logo">📦</div>
     <div>
-      <div class="header-title">SCAN PACKING</div>
-      <div class="header-sub">ระบบสแกนและบันทึกข้อมูล</div>
+      <div class="title">SCAN PACKING</div>
+      <div class="sub">ระบบสแกนและบันทึกข้อมูล</div>
     </div>
-    <div class="live-clock" id="live-clock"></div>
+    <div class="clock" id="clock">--:--:--</div>
   </div>
 
-  <!-- Operator -->
-  <div class="card">
-    <div class="card-label">👤 ชื่อผู้ปฏิบัติงาน</div>
-    <input type="text" id="operator-name" class="input-field" placeholder="กรอกชื่อผู้ปฏิบัติงาน..." autocomplete="name">
+  <!-- APPS SCRIPT SETUP GUIDE -->
+  <div class="guide" id="guide">
+    <strong>⚙️ ต้องอัปเดต Apps Script ก่อนใช้งาน</strong>
+    เปิด Google Sheet → <b>Extensions → Apps Script</b> → ลบโค้ดเดิม → วางโค้ดด้านล่าง → <b>Deploy → New Deployment → Web App</b> (Execute as: <b>Me</b>, Access: <b>Anyone</b>) → คัดลอก URL มาวางในช่องด้านล่าง
+    <br><br>
+    <b>โค้ด Apps Script (doGet + doPost):</b>
+    <code>
+function doGet(e) {
+  return handleRequest(e.parameter);
+}
+function doPost(e) {
+  var p = JSON.parse(e.postData.contents);
+  return handleRequest(p);
+}
+function handleRequest(p) {
+  var ss = SpreadsheetApp.openById('10E8JXPKq6Bfpoxrw4EqxGUnnsPYYAgdbO_QpZnhuTtA');
+  var sheet = ss.getSheetByName('ชีต2');
+  sheet.appendRow([p.orderNo, p.time, p.date, p.name]);
+  return ContentService.createTextOutput(JSON.stringify({status:'ok'}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+    </code>
+    <br>
+    <input id="scriptUrlInput" style="width:100%;margin-top:8px;padding:9px 12px;border-radius:9px;border:1.5px solid rgba(255,179,0,0.4);background:rgba(255,179,0,0.07);color:var(--warn);font-size:13px;outline:none;" placeholder="วาง Apps Script Web App URL ที่นี่...">
+    <button onclick="saveUrl()" style="margin-top:8px;width:100%;padding:10px;background:var(--warn);color:#000;font-family:'Sarabun',sans-serif;font-size:14px;font-weight:800;border:none;border-radius:9px;cursor:pointer;">💾 บันทึก URL</button>
   </div>
 
-  <!-- Scan -->
+  <!-- OPERATOR NAME -->
   <div class="card">
-    <div class="card-label">📡 โหมดสแกน</div>
+    <div class="label">👤 ชื่อผู้ปฏิบัติงาน</div>
+    <input type="text" id="opName" class="inp" placeholder="กรอกชื่อผู้ปฏิบัติงาน..." autocomplete="name">
+  </div>
 
-    <div class="mode-toggle">
-      <button class="mode-btn active" id="btn-camera" onclick="setMode('camera')">📷 กล้องอุปกรณ์</button>
-      <button class="mode-btn" id="btn-external" onclick="setMode('external')">🔫 สแกนเนอร์ภายนอก</button>
+  <!-- SCAN CARD -->
+  <div class="card">
+    <div class="label">📡 โหมดสแกน</div>
+
+    <!-- Mode buttons -->
+    <div class="modes">
+      <button class="modeBtn on" id="btnCam" onclick="setMode('cam')">📷 กล้องอุปกรณ์</button>
+      <button class="modeBtn"   id="btnExt" onclick="setMode('ext')">🔫 สแกนเนอร์ภายนอก</button>
     </div>
 
-    <!-- Camera -->
-    <div id="camera-section">
-      <button id="cam-toggle" class="cam-toggle-btn" onclick="toggleCamera()">📷 เปิดกล้องสแกน</button>
-      <div id="camera-container">
-        <video id="video-preview" autoplay playsinline muted></video>
-        <canvas id="scan-canvas"></canvas>
-        <div class="scan-overlay">
-          <div class="scan-frame">
-            <div class="corner-br"></div>
-            <div class="corner-bl"></div>
-            <div class="scan-line"></div>
+    <!-- Camera section -->
+    <div id="camSection">
+      <button class="camBtn" id="camToggle" onclick="toggleCam()">📷 เปิดกล้องสแกน</button>
+      <div id="camWrap">
+        <video id="videoEl" autoplay playsinline muted></video>
+        <div class="finder">
+          <div class="frame">
+            <div class="c tl"></div><div class="c tr"></div>
+            <div class="c bl"></div><div class="c br"></div>
+            <div class="line"></div>
           </div>
         </div>
-        <div class="cam-status" id="cam-status">กำลังค้นหาบาร์โค้ด / QR Code...</div>
+        <div class="frameFlash" id="frameFlash"></div>
+        <div class="camBar" id="camBar">กำลังสแกน QR / Barcode...</div>
       </div>
     </div>
 
-    <!-- Single unified input box -->
-    <div class="order-input-row">
+    <!-- Unified single input -->
+    <div class="inputRow">
       <input
-        type="text"
-        id="order-input"
-        class="input-field"
+        type="text" id="orderInp" class="inp"
         placeholder="สแกนหรือกรอก Order No. ที่นี่..."
-        autocomplete="off"
-        inputmode="text"
+        autocomplete="off" spellcheck="false"
       >
-      <button class="btn-submit" onclick="submitFromInput()">บันทึก</button>
+      <button class="btnSave" onclick="submitInput()">บันทึก</button>
     </div>
-    <div class="input-hint" id="input-hint">
-      ⌨️ พิมพ์แล้วกด Enter หรือกดปุ่ม "บันทึก" &nbsp;|&nbsp; 📷 กล้องจะบันทึกอัตโนมัติ
-    </div>
+    <div class="hint" id="hint">⌨️ พิมพ์แล้วกด Enter หรือกดปุ่ม "บันทึก" &nbsp;|&nbsp; 📷 กล้องบันทึกอัตโนมัติ</div>
 
-    <div class="order-display">
-      <span class="order-label">ล่าสุด</span>
-      <span class="order-value empty" id="last-order">รอการสแกน...</span>
+    <!-- Last scanned -->
+    <div class="lastScan" id="lastScan">
+      <span class="lastLabel">ล่าสุด</span>
+      <span class="lastVal empty" id="lastVal">รอการสแกน...</span>
     </div>
   </div>
 
-  <!-- Status -->
-  <div id="status-bar" class="status-bar idle">
-    <span id="status-icon">⏳</span>
-    <span id="status-text">พร้อมรับการสแกน</span>
+  <!-- STATUS BAR -->
+  <div id="statusBar" class="status idle">
+    <span id="statusIcon">⏳</span>
+    <span id="statusTxt">พร้อมรับการสแกน</span>
   </div>
 
-  <!-- Counters -->
-  <div class="counter-row">
-    <div class="counter-card">
-      <div class="counter-num success-num" id="count-success">0</div>
-      <div class="counter-desc">บันทึกสำเร็จ</div>
+  <!-- COUNTERS -->
+  <div class="counters">
+    <div class="ctr">
+      <div class="ctrN g" id="cntOk">0</div>
+      <div class="ctrD">บันทึกสำเร็จ</div>
     </div>
-    <div class="counter-card">
-      <div class="counter-num skip-num" id="count-dup">0</div>
-      <div class="counter-desc">สแกนซ้ำ</div>
+    <div class="ctr">
+      <div class="ctrN y" id="cntDup">0</div>
+      <div class="ctrD">สแกนซ้ำ</div>
     </div>
   </div>
 
-  <!-- Log -->
+  <!-- LOG -->
   <div class="card">
-    <div class="card-label" style="display:flex;justify-content:space-between;align-items:center;width:100%">
-      <span>📋 ประวัติการสแกน (เซสชันนี้)</span>
-      <button onclick="clearLog()" style="background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;margin-left:auto">ล้างข้อมูล</button>
+    <div class="label" style="display:flex;justify-content:space-between;align-items:center;width:100%">
+      <span>📋 ประวัติการสแกน</span>
+      <button onclick="clearAll()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Sarabun',sans-serif;margin-left:auto;">ล้างทั้งหมด</button>
     </div>
-    <div class="log-table-wrap">
+    <div class="logWrap">
       <table>
         <thead>
-          <tr>
-            <th>Order No.</th><th>เวลา</th><th>วันที่</th><th>ผู้ปฏิบัติงาน</th><th>สถานะ</th>
-          </tr>
+          <tr><th>Order No.</th><th>เวลา</th><th>วันที่</th><th>ชื่อ</th><th>สถานะ</th></tr>
         </thead>
-        <tbody id="log-body">
-          <tr><td colspan="5" class="empty-log">ยังไม่มีการสแกน</td></tr>
+        <tbody id="logBody">
+          <tr><td colspan="5" class="noData">ยังไม่มีการสแกน</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
-</div>
+</div><!-- /wrap -->
 
-<!-- Dup Popup -->
-<div class="popup-overlay" id="dup-popup">
-  <div class="popup-box">
-    <div class="popup-emoji">⚠️</div>
-    <div class="popup-title">แพ็คซ้ำ</div>
-    <div class="popup-sub" id="dup-order-text">Order นี้ถูกสแกนแล้ว</div>
-    <button class="popup-close" onclick="closePopup()">ตกลง</button>
+<!-- DUPLICATE POPUP -->
+<div class="overlay" id="overlay">
+  <div class="popBox">
+    <div class="popIcon">🚫</div>
+    <div class="popTitle">แพ็คซ้ำ</div>
+    <div class="popSub" id="popSub">Order นี้ถูกสแกนแล้วในเซสชันนี้</div>
+    <button class="popOk" onclick="closePop()">ตกลง</button>
   </div>
 </div>
 
-<div class="success-flash" id="success-flash"></div>
+<div class="flash" id="flash"></div>
 
 <script>
-// =========================================
-//  CONFIG — hardcoded, no setup needed
-// =========================================
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFaC5E-cplXXO9HzLy8KQpsQJApwht1KYiU90DtSfr4DWlY5FpOwYiMVDXgpKqQ1a5/exec';
+// ─────────────────────────────────────────
+//  CONFIG  (hardcoded script URL + saved override)
+// ─────────────────────────────────────────
+let SCRIPT_URL = localStorage.getItem('gasUrl') ||
+  'https://script.google.com/macros/s/AKfycbwFaC5E-cplXXO9HzLy8KQpsQJApwht1KYiU90DtSfr4DWlY5FpOwYiMVDXgpKqQ1a5/exec';
 
-// =========================================
+// If URL is already saved/hardcoded, hide the guide
+if (localStorage.getItem('gasUrl')) hideGuide();
+
+function saveUrl() {
+  const v = document.getElementById('scriptUrlInput').value.trim();
+  if (!v) return;
+  SCRIPT_URL = v;
+  localStorage.setItem('gasUrl', v);
+  hideGuide();
+  setStatus('ok','✅','บันทึก URL สำเร็จ — พร้อมใช้งาน');
+  setTimeout(()=>setStatus('idle','⏳','พร้อมรับการสแกน'),2500);
+}
+function hideGuide() {
+  document.getElementById('guide').style.display = 'none';
+}
+
+// ─────────────────────────────────────────
 //  STATE
-// =========================================
-let scannedOrders = new Set();
-let scanMode = 'camera';
-let cameraActive = false;
-let cameraStream = null;
-let scanAnimFrame = null;
-let lastCamScan = 0;
-let countSuccess = 0, countDup = 0;
-let logEntries = [];
+// ─────────────────────────────────────────
+let mode = 'cam';
+let camOn = false;
+let codeReader = null;
+let lastCamMs = 0;
+let scanned = new Set();
+let cntOk = 0, cntDup = 0;
+let logs = [];
 
-// =========================================
+// ─────────────────────────────────────────
 //  INIT
-// =========================================
-document.addEventListener('DOMContentLoaded', () => {
-  updateClock();
-  setInterval(updateClock, 1000);
+// ─────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  tick(); setInterval(tick, 1000);
 
-  const saved = localStorage.getItem('operatorName');
-  if (saved) document.getElementById('operator-name').value = saved;
-  document.getElementById('operator-name').addEventListener('input', e => {
-    localStorage.setItem('operatorName', e.target.value);
+  const name = localStorage.getItem('opName');
+  if (name) document.getElementById('opName').value = name;
+  document.getElementById('opName').addEventListener('input', e =>
+    localStorage.setItem('opName', e.target.value));
+
+  const inp = document.getElementById('orderInp');
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitInput(); }
   });
 
-  const input = document.getElementById('order-input');
-
-  // Enter = submit
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); submitFromInput(); }
-  });
-
-  // Re-focus input in external mode after any click
+  // keep focus in external mode
   document.addEventListener('click', e => {
-    if (scanMode === 'external' && !e.target.closest('button') && e.target !== input) {
-      setTimeout(() => input.focus(), 50);
+    if (mode === 'ext' && e.target !== inp && !e.target.closest('button') && !e.target.closest('.overlay')) {
+      setTimeout(() => inp.focus(), 60);
     }
   });
 });
 
-// =========================================
+// ─────────────────────────────────────────
 //  CLOCK — Thailand UTC+7
-// =========================================
-function updateClock() {
-  const t = getThaiTime();
-  document.getElementById('live-clock').textContent =
-    `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+// ─────────────────────────────────────────
+function tick() {
+  const t = thaiNow();
+  document.getElementById('clock').textContent =
+    `${pad(t.h)}:${pad(t.m)}:${pad(t.s)}`;
 }
-function getThaiTime() {
-  const now = new Date();
-  return new Date(now.getTime() + now.getTimezoneOffset()*60000 + 7*3600000);
+function thaiNow() {
+  const n = new Date();
+  const ms = n.getTime() + n.getTimezoneOffset()*60000 + 7*3600000;
+  const d = new Date(ms);
+  return { h:d.getHours(), m:d.getMinutes(), s:d.getSeconds(),
+           dd:d.getDate(), mo:d.getMonth()+1, yy:d.getFullYear() };
 }
-function getThaiDateStr() {
-  const t = getThaiTime();
-  return `${pad(t.getDate())}/${pad(t.getMonth()+1)}/${t.getFullYear()}`;
-}
-function getThaiTimeStr() {
-  const t = getThaiTime();
-  return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
-}
+function thaiDate() { const t=thaiNow(); return `${pad(t.dd)}/${pad(t.mo)}/${t.yy}`; }
+function thaiTime() { const t=thaiNow(); return `${pad(t.h)}:${pad(t.m)}:${pad(t.s)}`; }
 function pad(n) { return String(n).padStart(2,'0'); }
 
-// =========================================
-//  MODE SWITCH
-// =========================================
-function setMode(mode) {
-  scanMode = mode;
-  document.getElementById('btn-camera').classList.toggle('active', mode==='camera');
-  document.getElementById('btn-external').classList.toggle('active', mode==='external');
-  document.getElementById('camera-section').style.display = mode==='camera' ? 'block' : 'none';
+// ─────────────────────────────────────────
+//  MODE
+// ─────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('btnCam').classList.toggle('on', m==='cam');
+  document.getElementById('btnExt').classList.toggle('on', m==='ext');
+  document.getElementById('camSection').style.display = m==='cam' ? 'block' : 'none';
 
-  if (mode==='external') {
-    document.getElementById('input-hint').textContent =
-      '🔫 โฟกัสที่ช่องนี้แล้วสแกน — บันทึกอัตโนมัติเมื่อกด Enter | ⌨️ หรือพิมพ์แล้วกด Enter';
-    if (cameraActive) stopCamera();
-    setTimeout(() => document.getElementById('order-input').focus(), 100);
+  if (m === 'ext') {
+    document.getElementById('hint').textContent =
+      '🔫 โฟกัสที่ช่องนี้แล้วสแกน — กด Enter อัตโนมัติ | ⌨️ หรือพิมพ์แล้วกด Enter';
+    if (camOn) stopCam();
+    setTimeout(() => document.getElementById('orderInp').focus(), 80);
   } else {
-    document.getElementById('input-hint').textContent =
-      '⌨️ พิมพ์แล้วกด Enter หรือกดปุ่ม "บันทึก" | 📷 กล้องจะบันทึกอัตโนมัติ';
+    document.getElementById('hint').textContent =
+      '⌨️ พิมพ์แล้วกด Enter หรือกดปุ่ม "บันทึก" | 📷 กล้องบันทึกอัตโนมัติ';
   }
 }
 
-// =========================================
-//  CAMERA
-// =========================================
-async function toggleCamera() {
-  cameraActive ? stopCamera() : await startCamera();
-}
+// ─────────────────────────────────────────
+//  CAMERA — using ZXing BrowserMultiFormatReader
+// ─────────────────────────────────────────
+async function toggleCam() { camOn ? stopCam() : await startCam(); }
 
-async function startCamera() {
+async function startCam() {
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal:'environment' }, width:{ideal:1920}, height:{ideal:1080} }
-    });
-    const video = document.getElementById('video-preview');
-    video.srcObject = cameraStream;
-    await video.play();
-    cameraActive = true;
-    document.getElementById('camera-container').classList.add('active');
-    document.getElementById('cam-toggle').innerHTML = '⏹ หยุดกล้อง';
-    document.getElementById('cam-toggle').classList.add('active');
-    document.getElementById('cam-status').textContent = 'กำลังสแกน...';
-    requestAnimationFrame(scanFrame);
-  } catch(err) {
-    setStatus('error','❌',`ไม่สามารถเข้าถึงกล้อง: ${err.message}`);
-  }
-}
-
-function stopCamera() {
-  if (cameraStream) { cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null; }
-  cameraActive = false;
-  document.getElementById('camera-container').classList.remove('active');
-  document.getElementById('cam-toggle').innerHTML = '📷 เปิดกล้องสแกน';
-  document.getElementById('cam-toggle').classList.remove('active');
-  if (scanAnimFrame) cancelAnimationFrame(scanAnimFrame);
-}
-
-function scanFrame() {
-  if (!cameraActive) return;
-  const video = document.getElementById('video-preview');
-  const canvas = document.getElementById('scan-canvas');
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const qr = jsQR(img.data, img.width, img.height, { inversionAttempts:'dontInvert' });
-    if (qr && qr.data) {
-      const now = Date.now();
-      if (now - lastCamScan > 2000) {
-        lastCamScan = now;
-        processOrder(qr.data.trim());
-      }
-      // pause then resume
-      setTimeout(() => { scanAnimFrame = requestAnimationFrame(scanFrame); }, 2000);
+    // Check ZXing is loaded
+    if (!window.ZXingBrowser) {
+      setStatus('err','❌','ไม่สามารถโหลดไลบรารีสแกน กรุณารีเฟรช');
       return;
     }
-  }
-  scanAnimFrame = requestAnimationFrame(scanFrame);
-}
 
-// =========================================
-//  UNIFIED INPUT SUBMIT
-// =========================================
-function submitFromInput() {
-  const input = document.getElementById('order-input');
-  const val = input.value.trim();
-  if (!val) return;
-  processOrder(val);
-  input.value = '';
-  input.focus();
-}
-
-// =========================================
-//  PROCESS ORDER
-// =========================================
-function processOrder(orderNo) {
-  if (!orderNo) return;
-  if (scannedOrders.has(orderNo)) {
-    countDup++;
-    document.getElementById('count-dup').textContent = countDup;
-    showDupPopup(orderNo);
-    return;
-  }
-  submitToSheet(orderNo);
-}
-
-// =========================================
-//  SUBMIT TO GOOGLE SHEETS
-// =========================================
-async function submitToSheet(orderNo) {
-  const operatorName = document.getElementById('operator-name').value.trim();
-  const date = getThaiDateStr();
-  const time = getThaiTimeStr();
-
-  scannedOrders.add(orderNo); // lock immediately
-
-  document.getElementById('last-order').textContent = orderNo;
-  document.getElementById('last-order').classList.remove('empty');
-  setStatus('sending','<div class="spinner"></div>',`กำลังบันทึก ${orderNo}...`);
-
-  try {
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ orderNo, time, date, name: operatorName })
+    codeReader = new ZXingBrowser.BrowserMultiFormatReader(null, {
+      delayBetweenScanAttempts: 200,
+      delayBetweenScanSuccess: 2000,
     });
 
-    countSuccess++;
-    document.getElementById('count-success').textContent = countSuccess;
-    setStatus('success','✅',`บันทึกสำเร็จ: ${orderNo}`);
-    flashSuccess();
-    addLogEntry(orderNo, time, date, operatorName, 'success');
-    setTimeout(() => setStatus('idle','⏳','พร้อมรับการสแกน'), 2500);
+    // Get camera list and prefer back camera
+    const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+    let deviceId = undefined;
+    if (devices.length > 1) {
+      // Prefer back/environment camera
+      const back = devices.find(d =>
+        /back|rear|environment/i.test(d.label) ||
+        d.label === '' // on mobile, unnamed = usually back
+      );
+      if (back) deviceId = back.deviceId;
+      else deviceId = devices[devices.length - 1].deviceId; // usually back on mobile
+    }
+
+    const videoEl = document.getElementById('videoEl');
+
+    await codeReader.decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
+      if (result) {
+        const now = Date.now();
+        if (now - lastCamMs < 2000) return;
+        lastCamMs = now;
+        flashFrame();
+        processOrder(result.getText().trim());
+      }
+    });
+
+    camOn = true;
+    document.getElementById('camWrap').classList.add('show');
+    document.getElementById('camToggle').textContent = '⏹ หยุดกล้อง';
+    document.getElementById('camToggle').classList.add('on');
+    document.getElementById('camBar').textContent = 'กำลังสแกน QR / Barcode...';
 
   } catch(err) {
-    scannedOrders.delete(orderNo);
-    setStatus('error','❌',`เกิดข้อผิดพลาด: ${err.message}`);
-    addLogEntry(orderNo, time, date, operatorName, 'error');
+    console.error(err);
+    setStatus('err','❌',`กล้อง: ${err.message}`);
   }
 }
 
-// =========================================
-//  UI
-// =========================================
-function setStatus(type, icon, text) {
-  document.getElementById('status-bar').className = 'status-bar ' + type;
-  document.getElementById('status-icon').innerHTML = icon;
-  document.getElementById('status-text').textContent = text;
+function stopCam() {
+  if (codeReader) { try { codeReader.reset(); } catch(e){} codeReader = null; }
+  camOn = false;
+  document.getElementById('camWrap').classList.remove('show');
+  document.getElementById('camToggle').textContent = '📷 เปิดกล้องสแกน';
+  document.getElementById('camToggle').classList.remove('on');
 }
 
-function showDupPopup(orderNo) {
-  document.getElementById('dup-order-text').textContent = `Order No. "${orderNo}" ถูกสแกนแล้วในเซสชันนี้`;
-  document.getElementById('dup-popup').classList.add('show');
-  setStatus('error','⚠️',`แพ็คซ้ำ: ${orderNo}`);
-  setTimeout(() => setStatus('idle','⏳','พร้อมรับการสแกน'), 3000);
-}
-
-function closePopup() {
-  document.getElementById('dup-popup').classList.remove('show');
-  if (scanMode==='external') document.getElementById('order-input').focus();
-}
-
-function flashSuccess() {
-  const el = document.getElementById('success-flash');
+function flashFrame() {
+  const el = document.getElementById('frameFlash');
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 300);
+  setTimeout(() => el.classList.remove('show'), 400);
 }
 
-function addLogEntry(orderNo, time, date, name, status) {
-  logEntries.unshift({ orderNo, time, date, name, status });
-  document.getElementById('log-body').innerHTML = logEntries.slice(0,50).map(e=>`
+// ─────────────────────────────────────────
+//  SUBMIT FROM INPUT BOX
+// ─────────────────────────────────────────
+function submitInput() {
+  const inp = document.getElementById('orderInp');
+  const val = inp.value.trim();
+  if (!val) return;
+  processOrder(val);
+  inp.value = '';
+  inp.focus();
+}
+
+// ─────────────────────────────────────────
+//  PROCESS ORDER
+// ─────────────────────────────────────────
+function processOrder(orderNo) {
+  if (!orderNo) return;
+  if (scanned.has(orderNo)) {
+    cntDup++;
+    document.getElementById('cntDup').textContent = cntDup;
+    showPop(orderNo);
+    return;
+  }
+  sendToSheet(orderNo);
+}
+
+// ─────────────────────────────────────────
+//  SEND TO GOOGLE SHEETS
+//  Uses GET with URL params — more CORS-friendly than POST for Apps Script
+// ─────────────────────────────────────────
+async function sendToSheet(orderNo) {
+  const name = document.getElementById('opName').value.trim();
+  const date = thaiDate();
+  const time = thaiTime();
+
+  scanned.add(orderNo); // lock immediately
+
+  // Update UI
+  const lv = document.getElementById('lastVal');
+  lv.textContent = orderNo; lv.classList.remove('empty');
+  const ls = document.getElementById('lastScan');
+  ls.classList.add('lit');
+  setTimeout(()=>ls.classList.remove('lit'), 2000);
+
+  setStatus('sending','<div class="spin"></div>',`กำลังบันทึก ${orderNo}...`);
+
+  const params = new URLSearchParams({ orderNo, time, date, name });
+  const url = `${SCRIPT_URL}?${params.toString()}`;
+
+  try {
+    // Use fetch with no-cors for GET — Apps Script doGet handles this fine
+    await fetch(url, { method:'GET', mode:'no-cors' });
+
+    cntOk++;
+    document.getElementById('cntOk').textContent = cntOk;
+    setStatus('ok','✅',`บันทึกสำเร็จ: ${orderNo}`);
+    doFlash();
+    addLog(orderNo, time, date, name, 'ok');
+    setTimeout(()=>setStatus('idle','⏳','พร้อมรับการสแกน'), 2500);
+
+  } catch(err) {
+    // Network error — allow retry
+    scanned.delete(orderNo);
+    setStatus('err','❌',`เชื่อมต่อไม่ได้: ${err.message}`);
+    addLog(orderNo, time, date, name, 'err');
+    console.error('Fetch error:', err);
+  }
+}
+
+// ─────────────────────────────────────────
+//  UI
+// ─────────────────────────────────────────
+function setStatus(type, icon, txt) {
+  document.getElementById('statusBar').className = 'status ' + type;
+  document.getElementById('statusIcon').innerHTML = icon;
+  document.getElementById('statusTxt').textContent = txt;
+}
+
+function showPop(orderNo) {
+  document.getElementById('popSub').textContent = `"${orderNo}" ถูกสแกนแล้วในเซสชันนี้`;
+  document.getElementById('overlay').classList.add('show');
+  setStatus('err','⚠️',`แพ็คซ้ำ: ${orderNo}`);
+  setTimeout(()=>setStatus('idle','⏳','พร้อมรับการสแกน'), 3500);
+}
+function closePop() {
+  document.getElementById('overlay').classList.remove('show');
+  if (mode==='ext') document.getElementById('orderInp').focus();
+}
+
+function doFlash() {
+  const el = document.getElementById('flash');
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 350);
+}
+
+function addLog(orderNo, time, date, name, status) {
+  logs.unshift({ orderNo, time, date, name, status });
+  document.getElementById('logBody').innerHTML = logs.slice(0,50).map(e=>`
     <tr>
       <td>${e.orderNo}</td>
       <td>${e.time}</td>
       <td>${e.date}</td>
       <td>${e.name||'-'}</td>
-      <td style="color:${e.status==='success'?'var(--success)':'var(--danger)'}">${
-        e.status==='success'?'✅ สำเร็จ':'❌ ผิดพลาด'
-      }</td>
-    </tr>
-  `).join('');
+      <td style="color:${e.status==='ok'?'var(--success)':'var(--danger)'}">
+        ${e.status==='ok'?'✅ สำเร็จ':'❌ ผิดพลาด'}
+      </td>
+    </tr>`).join('');
 }
 
-function clearLog() {
-  logEntries=[]; scannedOrders.clear();
-  countSuccess=0; countDup=0;
-  document.getElementById('count-success').textContent='0';
-  document.getElementById('count-dup').textContent='0';
-  document.getElementById('last-order').textContent='รอการสแกน...';
-  document.getElementById('last-order').classList.add('empty');
-  document.getElementById('log-body').innerHTML='<tr><td colspan="5" class="empty-log">ยังไม่มีการสแกน</td></tr>';
+function clearAll() {
+  logs=[]; scanned.clear(); cntOk=0; cntDup=0;
+  document.getElementById('cntOk').textContent='0';
+  document.getElementById('cntDup').textContent='0';
+  document.getElementById('lastVal').textContent='รอการสแกน...';
+  document.getElementById('lastVal').classList.add('empty');
+  document.getElementById('logBody').innerHTML='<tr><td colspan="5" class="noData">ยังไม่มีการสแกน</td></tr>';
   setStatus('idle','⏳','พร้อมรับการสแกน');
 }
 
-document.getElementById('dup-popup').addEventListener('click', function(e) {
-  if (e.target===this) closePopup();
+document.getElementById('overlay').addEventListener('click', function(e){
+  if(e.target===this) closePop();
 });
-document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') closePop(); });
 </script>
 </body>
 </html>
